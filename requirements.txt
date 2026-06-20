@@ -1,0 +1,10 @@
+# PyQt6 锁定在 6.6.1：更新版本（6.11.x）在部分 Windows 环境上有兼容性问题，
+# 会导致 Qt6Core.dll 加载失败（WinError 127），详见 docs/known-issues.md
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
+cnlunar==0.2.4
+chinese-calendar==1.11.0
+requests==2.34.2
+cryptography==49.0.0
+pytest==9.1.0
