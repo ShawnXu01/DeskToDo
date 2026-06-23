@@ -6,16 +6,81 @@
 """
 from __future__ import annotations
 
+import calendar
+import json
+import shutil
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Optional
 
 import cnlunar
+
+from deskcal.core.storage import get_data_dir
 
 try:
     import chinese_calendar
 except ImportError:  # pragma: no cover
     chinese_calendar = None
+
+HOLIDAYS_FILE_NAME = "holidays.json"
+_DEFAULT_HOLIDAYS_ASSET = Path(__file__).resolve().parent.parent / "assets" / "holidays_2026_default.json"
+
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
+    """weekday: 0=周一...6=周日；n: 第几个（从1开始）。"""
+    cal = calendar.Calendar()
+    matches = [d for d in cal.itermonthdates(year, month) if d.month == month and d.weekday() == weekday]
+    return matches[n - 1]
+
+
+def get_formula_holiday(day: date) -> Optional[str]:
+    """每年日期不固定、按公式计算的特殊日期（非法定节假日，不需要导入）。"""
+    if day == _nth_weekday_of_month(day.year, 5, 6, 2):
+        return "母亲节"
+    if day == _nth_weekday_of_month(day.year, 6, 6, 3):
+        return "父亲节"
+    return None
+
+
+def get_holidays_file() -> Path:
+    return get_data_dir() / HOLIDAYS_FILE_NAME
+
+
+def ensure_default_holidays_seeded() -> None:
+    """首次运行时把内置的当年法定节假日默认数据复制到用户数据目录，之后用户可自行替换导入。"""
+    target = get_holidays_file()
+    if not target.exists() and _DEFAULT_HOLIDAYS_ASSET.exists():
+        shutil.copy(_DEFAULT_HOLIDAYS_ASSET, target)
+
+
+def load_imported_holidays() -> dict[date, str]:
+    """读取用户导入/默认种入的法定节假日文件，格式 {"2026-05-01": "劳动节", ...}。
+    文件不存在或格式有问题时静默返回空字典，不抛异常、不弹窗。
+    """
+    path = get_holidays_file()
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        result: dict[date, str] = {}
+        for key, value in raw.items():
+            try:
+                result[date.fromisoformat(key)] = str(value)
+            except ValueError:
+                continue
+        return result
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def get_special_day_label(day: date) -> Optional[str]:
+    """优先显示导入的法定节假日名，否则显示公式计算的特殊日期（母亲节/父亲节等）。"""
+    imported = load_imported_holidays()
+    if day in imported:
+        return imported[day]
+    return get_formula_holiday(day)
 
 
 @dataclass

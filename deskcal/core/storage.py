@@ -13,8 +13,11 @@ from .models import DatedTask, FloatingTask
 APP_DIR_NAME = "DeskCal"
 TASKS_FILE_NAME = "tasks.json"
 WINDOW_STATE_FILE_NAME = "window_state.json"
+APPEARANCE_FILE_NAME = "appearance.json"
 
 TOMBSTONE_RETENTION_DAYS = 90
+DEFAULT_PANEL_ALPHA = 230
+DEFAULT_CONFIG_PANEL_ALPHA = 210
 
 
 def get_data_dir() -> Path:
@@ -33,15 +36,57 @@ def get_window_state_file() -> Path:
     return get_data_dir() / WINDOW_STATE_FILE_NAME
 
 
-def load_window_geometry() -> Optional[dict]:
+def get_appearance_file() -> Path:
+    return get_data_dir() / APPEARANCE_FILE_NAME
+
+
+def load_appearance() -> dict:
+    path = get_appearance_file()
+    data = {}
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    data.setdefault("panel_alpha", DEFAULT_PANEL_ALPHA)
+    data.setdefault("config_panel_alpha", DEFAULT_CONFIG_PANEL_ALPHA)
+    data.setdefault("config_background_path", None)
+    data.setdefault("autostart_enabled", True)
+    return data
+
+
+def save_appearance(**fields) -> None:
+    """按字段合并保存，不会覆盖其它已存的外观设置。"""
+    payload = load_appearance()
+    payload.update(fields)
+    atomic_write_json(get_appearance_file(), payload)
+
+
+def _load_window_state_payload() -> dict:
+    """读取 window_state.json；旧版本（单一一组 x/y/width/height）会迁移成按显示器签名分组的格式。"""
     path = get_window_state_file()
     if not path.exists():
-        return None
+        return {"profiles": {}}
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        raw = json.load(f)
+    if "profiles" in raw:
+        return raw
+    if "x" in raw:
+        from deskcal.utils.monitor import compute_monitor_signature
+
+        return {"profiles": {compute_monitor_signature(): raw}}
+    return {"profiles": {}}
+
+
+def list_window_profiles() -> dict[str, dict]:
+    """返回 {显示器签名: 几何信息}，给设置面板的"显示屏设置"页展示用。"""
+    return _load_window_state_payload()["profiles"]
+
+
+def load_window_geometry(signature: str) -> Optional[dict]:
+    return list_window_profiles().get(signature)
 
 
 def save_window_geometry(
+    signature: str,
     x: int,
     y: int,
     width: int,
@@ -49,17 +94,16 @@ def save_window_geometry(
     widget_area_width: int,
     sidebar_width: int,
 ) -> None:
-    atomic_write_json(
-        get_window_state_file(),
-        {
-            "x": x,
-            "y": y,
-            "width": width,
-            "height": height,
-            "widget_area_width": widget_area_width,
-            "sidebar_width": sidebar_width,
-        },
-    )
+    payload = _load_window_state_payload()
+    payload["profiles"][signature] = {
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "widget_area_width": widget_area_width,
+        "sidebar_width": sidebar_width,
+    }
+    atomic_write_json(get_window_state_file(), payload)
 
 
 def atomic_write_json(path: Path, payload: dict) -> None:

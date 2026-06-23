@@ -56,6 +56,9 @@ class RecurrenceRule:
         if self.type is RecurrenceType.WEEKLY and self.weekdays is not None:
             if any(w < 1 or w > 7 for w in self.weekdays):
                 raise ValueError("weekdays 取值必须是 1(周一)~7(周日)")
+        if self.type is RecurrenceType.WEEKLY and self.start is not None and self.end is not None:
+            if self.start > self.end:
+                raise ValueError("WEEKLY 的 start 不能晚于 end")
         if self.type is RecurrenceType.SPECIFIC_DATES and not self.dates:
             raise ValueError("SPECIFIC_DATES 类型必须提供 dates")
 
@@ -65,6 +68,10 @@ class RecurrenceRule:
         if self.type is RecurrenceType.DAILY_RANGE:
             return self.start <= day <= self.end
         if self.type is RecurrenceType.WEEKLY:
+            if self.start is not None and day < self.start:
+                return False
+            if self.end is not None and day > self.end:
+                return False
             return day.isoweekday() in self.weekdays
         if self.type is RecurrenceType.SPECIFIC_DATES:
             return day in self.dates

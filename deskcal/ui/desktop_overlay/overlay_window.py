@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import QRect, QRectF, Qt
+from PyQt6.QtCore import QRect, QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
@@ -22,7 +22,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from deskcal.core.storage import TaskStore, load_window_geometry, save_window_geometry
+from deskcal.core.storage import (
+    TaskStore,
+    load_appearance,
+    load_window_geometry,
+    save_appearance,
+    save_window_geometry,
+)
 from deskcal.core.sync.gist_provider import GistSyncProvider
 from deskcal.services.sync_manager import SyncManager
 from deskcal.ui.config_panel.config_window import ConfigWindow
@@ -31,6 +37,7 @@ from deskcal.ui.desktop_overlay.sidebar_todo import SidebarTodo
 from deskcal.ui.desktop_overlay.widgets.registry import WIDGET_DEFINITIONS, WidgetConfigStore
 from deskcal.ui.style_utils import make_scroll_area_transparent
 from deskcal.utils import crypto
+from deskcal.utils.monitor import compute_monitor_signature
 
 PANEL_RADIUS = 16
 PANEL_COLOR = QColor(20, 20, 20, 230)
@@ -256,7 +263,7 @@ class OverlayWindow(QWidget):
     def __init__(self, store: TaskStore, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("DeskCal")
+        self.setWindowTitle("DeskToDo")
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnBottomHint
@@ -269,6 +276,8 @@ class OverlayWindow(QWidget):
         self._sidebar_width = DEFAULT_SIDEBAR_WIDTH
         self._restore_geometry()
 
+        self._panel_alpha = load_appearance().get("panel_alpha", PANEL_COLOR.alpha())
+
         self._widget_store = WidgetConfigStore()
         self._widget_store.load()
         self._config_window: Optional[ConfigWindow] = None
@@ -279,7 +288,7 @@ class OverlayWindow(QWidget):
 
         self._widget_area_container = QWidget()
         self._widget_area_layout = QVBoxLayout(self._widget_area_container)
-        self._widget_area_layout.setContentsMargins(0, 0, 0, 0)
+        self._widget_area_layout.setContentsMargins(0, 0, 8, 0)
         self._widget_area_layout.setSpacing(4)
         self._widget_area_layout.addStretch(1)
 
@@ -318,12 +327,38 @@ class OverlayWindow(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(QRectF(self.rect()), PANEL_RADIUS, PANEL_RADIUS)
-        painter.fillPath(path, PANEL_COLOR)
+        panel_color = QColor(PANEL_COLOR.red(), PANEL_COLOR.green(), PANEL_COLOR.blue(), self._panel_alpha)
+        painter.fillPath(path, panel_color)
         painter.end()
         super().paintEvent(event)
 
+    def set_panel_alpha(self, alpha: int) -> None:
+        self._panel_alpha = alpha
+        save_appearance(panel_alpha=alpha)
+        self.update()
+
     def _restore_geometry(self) -> None:
-        saved = load_window_geometry()
+        self._monitor_signature = compute_monitor_signature()
+        self._apply_saved_or_default_geometry()
+
+        # 插拔显示器时签名变了就换套记忆位置；不在这里反向保存，因为此时 Windows 往往已经
+        # 把窗口强制挪走，保存动作仍然只发生在 set_locked/closeEvent 里。
+        app = QGuiApplication.instance()
+        self._screen_change_timer = QTimer(self)
+        self._screen_change_timer.setSingleShot(True)
+        self._screen_change_timer.timeout.connect(self._on_monitor_signature_maybe_changed)
+        app.screenAdded.connect(lambda _screen: self._screen_change_timer.start(500))
+        app.screenRemoved.connect(lambda _screen: self._screen_change_timer.start(500))
+
+    def _on_monitor_signature_maybe_changed(self) -> None:
+        signature = compute_monitor_signature()
+        if signature == self._monitor_signature:
+            return
+        self._monitor_signature = signature
+        self._apply_saved_or_default_geometry()
+
+    def _apply_saved_or_default_geometry(self) -> None:
+        saved = load_window_geometry(self._monitor_signature)
         if saved is not None:
             self._widget_area_width = max(saved.get("widget_area_width", DEFAULT_WIDGET_AREA_WIDTH), MIN_WIDGET_AREA_WIDTH)
             self._sidebar_width = max(saved.get("sidebar_width", DEFAULT_SIDEBAR_WIDTH), MIN_SIDEBAR_WIDTH)
@@ -334,6 +369,9 @@ class OverlayWindow(QWidget):
             on_screen = any(
                 screen.availableGeometry().intersects(candidate) for screen in QGuiApplication.screens()
             )
+            if hasattr(self, "_widget_area_scroll"):
+                self._widget_area_scroll.setFixedWidth(self._widget_area_width)
+                self._sidebar.setFixedWidth(self._sidebar_width)
             if on_screen:
                 self.setGeometry(candidate)
                 return
@@ -341,7 +379,9 @@ class OverlayWindow(QWidget):
 
     def persist_geometry(self) -> None:
         geo = self.geometry()
-        save_window_geometry(geo.x(), geo.y(), geo.width(), geo.height(), self._widget_area_width, self._sidebar_width)
+        save_window_geometry(
+            self._monitor_signature, geo.x(), geo.y(), geo.width(), geo.height(), self._widget_area_width, self._sidebar_width
+        )
 
     def closeEvent(self, event) -> None:
         self.persist_geometry()
@@ -387,6 +427,9 @@ class OverlayWindow(QWidget):
                 self._widget_store,
                 on_widgets_changed=self.render_widgets,
                 sync_manager=self._sync_manager,
+                current_panel_alpha=self._panel_alpha,
+                on_panel_alpha_changed=self.set_panel_alpha,
+                on_holidays_changed=self._calendar.render,
             )
         self._config_window.show()
         self._config_window.raise_()

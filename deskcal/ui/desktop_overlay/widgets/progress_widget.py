@@ -96,9 +96,9 @@ class ProgressWidget(QWidget):
 
             title_row = QHBoxLayout()
             title_label = ElidingLabel(item["title"])
-            title_label.setStyleSheet("color: #ffffff; font-size: 11px; background: transparent;")
+            title_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: bold; background: transparent;")
             percent_label = QLabel()
-            percent_label.setStyleSheet("color: #ffffff; font-size: 11px; background: transparent;")
+            percent_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: bold; background: transparent;")
             title_row.addWidget(title_label, 1)
             title_row.addWidget(percent_label)
             row_layout.addLayout(title_row)

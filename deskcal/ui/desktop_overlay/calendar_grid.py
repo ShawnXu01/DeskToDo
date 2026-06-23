@@ -22,10 +22,10 @@ from PyQt6.QtWidgets import (
 
 from deskcal.core.models import DatedTask
 from deskcal.core.storage import TaskStore
-from deskcal.services.lunar_holiday import get_day_lunar_info
+from deskcal.services.lunar_holiday import get_day_lunar_info, get_special_day_label
 from deskcal.ui.desktop_overlay.task_chip import TaskChipWidget
 from deskcal.ui.dialogs.task_dialog import PRIORITY_COLORS, TaskDialog
-from deskcal.ui.style_utils import make_scroll_area_transparent
+from deskcal.ui.style_utils import ElidingLabel, make_scroll_area_transparent
 
 WEEKDAY_HEADER_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
@@ -42,14 +42,22 @@ class DayCellWidget(QFrame):
         is_current_month: bool,
         is_today: bool,
         on_create_requested: Callable[[date], None],
+        on_jump_to_month: Callable[[date], None],
         parent=None,
     ):
         super().__init__(parent)
         self._day = day
+        self._is_current_month = is_current_month
         self._on_create_requested = on_create_requested
+        self._on_jump_to_month = on_jump_to_month
 
+        self.setObjectName("dayCell")
         self.setFrameShape(QFrame.Shape.Box)
-        self.setStyleSheet("QFrame { border: 1px solid rgba(255, 255, 255, 25); background: transparent; }")
+        # #dayCell 限定只让外圈边框变亮，否则 QFrame 选择器会级联到内部的 QScrollArea。
+        self.setStyleSheet(
+            "QFrame { border: 1px solid rgba(255, 255, 255, 25); background: transparent; }"
+            "QFrame#dayCell { border: 2px solid rgba(255, 255, 255, 160); }"
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
@@ -60,27 +68,28 @@ class DayCellWidget(QFrame):
         if is_today:
             date_label.setStyleSheet(
                 "color: #ffffff; background-color: #e53935; border-radius: 8px;"
-                "padding: 0px 4px; font-weight: bold;"
+                "padding: 0px 4px; font-size: 13px; font-weight: bold;"
             )
         else:
-            date_label.setStyleSheet("color: #ffffff;")
+            date_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: bold;")
         header_row.addWidget(date_label)
 
         if is_today:
             today_badge = QLabel("今天")
-            today_badge.setStyleSheet("color: #e53935; font-size: 10px;")
+            today_badge.setStyleSheet("color: #e53935; font-size: 10px; font-weight: bold;")
             header_row.addWidget(today_badge)
 
-        header_row.addStretch(1)
-
         lunar_info = get_day_lunar_info(day)
-        lunar_text = lunar_info.festival_text or lunar_info.lunar_text
-        lunar_label = QLabel(lunar_text)
-        lunar_label.setStyleSheet("color: #999999; font-size: 10px;")
-        # 农历/节日文字长度不一，若按它的内容算最小宽度，会把某一列的格子顶得比其他列宽；
-        # Ignored 让布局忽略它的 sizeHint，宽度不够时单纯裁切，不影响列宽分配。
+        special_label = get_special_day_label(day)
+        lunar_text = special_label or lunar_info.festival_text or lunar_info.lunar_text
+        lunar_label = ElidingLabel(lunar_text)
+        lunar_label.setStyleSheet(
+            f"color: {'#ffd54f' if special_label else '#cccccc'}; font-size: 11px; font-weight: bold;"
+        )
+        lunar_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        # Ignored 让某一天的长文字不会把所在列顶宽；stretch=1 仍然给它格子里剩余的全部宽度。
         lunar_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        header_row.addWidget(lunar_label)
+        header_row.addWidget(lunar_label, 1)
 
         layout.addLayout(header_row)
 
@@ -102,6 +111,15 @@ class DayCellWidget(QFrame):
             effect = QGraphicsOpacityEffect(self)
             effect.setOpacity(0.45)
             self.setGraphicsEffect(effect)
+            # 让滚动区域对鼠标事件透明，点击非本月格子才能落到 DayCellWidget 自己的 mousePressEvent。
+            scroll_area.viewport().setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def mousePressEvent(self, event) -> None:
+        if not self._is_current_month and event.button() == Qt.MouseButton.LeftButton:
+            self._on_jump_to_month(self._day)
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def set_tasks(self, tasks: list[DatedTask], on_edit: Callable[[DatedTask], None], on_save: Callable[[], None]) -> None:
         while self._tasks_layout.count() > 1:
@@ -167,7 +185,7 @@ class CalendarGrid(QWidget):
         for col, label in enumerate(WEEKDAY_HEADER_LABELS):
             lbl = QLabel(label)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet("color: #cccccc; background: transparent;")
+            lbl.setStyleSheet("color: #dddddd; font-size: 12px; font-weight: bold; background: transparent;")
             self._grid_layout.addWidget(lbl, 0, col)
         self._grid_layout.setRowStretch(0, 0)
         for row in range(1, ROWS + 1):
@@ -191,6 +209,11 @@ class CalendarGrid(QWidget):
             self._month = 1
         else:
             self._month += 1
+        self.render()
+
+    def _jump_to_month(self, day: date) -> None:
+        self._year = day.year
+        self._month = day.month
         self.render()
 
     def _open_create_dialog(self, day: date) -> None:
@@ -225,7 +248,7 @@ class CalendarGrid(QWidget):
             is_current_month = day.month == self._month and day.year == self._year
             is_today = day == today
 
-            cell = DayCellWidget(day, is_current_month, is_today, self._open_create_dialog)
+            cell = DayCellWidget(day, is_current_month, is_today, self._open_create_dialog, self._jump_to_month)
 
             day_tasks = [t for t in all_dated_tasks if t.recurrence.occurs_on(day)]
             day_tasks.sort(key=lambda t: t.sort_key(day))

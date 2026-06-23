@@ -8,18 +8,22 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
-from deskcal.core.storage import TaskStore
+from deskcal.core.storage import TaskStore, load_appearance
 from deskcal.services import autostart
+from deskcal.services.lunar_holiday import ensure_default_holidays_seeded
 from deskcal.tray.tray_icon import TrayIcon
 from deskcal.ui.desktop_overlay.overlay_window import OverlayWindow
 from deskcal.ui.desktop_overlay.widgets.registry import WidgetConfigStore
 from deskcal.ui.onboarding.wizard import OnboardingWizard
 from deskcal.utils import crypto
+from deskcal.utils.icons import app_icon
 
 
 def main() -> None:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    app.setWindowIcon(app_icon())
+    ensure_default_holidays_seeded()
 
     if not crypto.is_onboarding_completed():
         widget_store = WidgetConfigStore()
@@ -37,7 +41,10 @@ def main() -> None:
     tray = TrayIcon(window)
     tray.show()
 
-    autostart.enable_autostart()
+    if load_appearance()["autostart_enabled"]:
+        autostart.enable_autostart()
+    else:
+        autostart.disable_autostart()
 
     sys.exit(app.exec())
 

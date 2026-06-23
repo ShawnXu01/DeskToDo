@@ -2,28 +2,17 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from deskcal.ui.desktop_overlay.overlay_window import OverlayWindow
+from deskcal.utils.icons import app_icon
 
 HIDE_DURATION_MS = 15_000
 
 
-def _build_tray_icon() -> QIcon:
-    pixmap = QPixmap(32, 32)
-    pixmap.fill(QColor(0, 0, 0, 0))
-    painter = QPainter(pixmap)
-    painter.setBrush(QColor("#e53935"))
-    painter.setPen(QColor("#ffffff"))
-    painter.drawEllipse(2, 2, 28, 28)
-    painter.end()
-    return QIcon(pixmap)
-
-
 class TrayIcon(QSystemTrayIcon):
     def __init__(self, window: OverlayWindow, parent=None):
-        super().__init__(_build_tray_icon(), parent)
+        super().__init__(app_icon(), parent)
         self._window = window
 
         self._hide_timer = QTimer(self)
@@ -48,7 +37,7 @@ class TrayIcon(QSystemTrayIcon):
         quit_action.triggered.connect(QApplication.quit)
 
         self.setContextMenu(menu)
-        self.setToolTip("DeskCal")
+        self.setToolTip("DeskToDo")
 
     def _hide_temporarily(self) -> None:
         self._window.hide()

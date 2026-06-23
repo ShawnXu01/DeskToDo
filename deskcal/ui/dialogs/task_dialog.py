@@ -5,24 +5,25 @@ from datetime import date, datetime
 from typing import Optional, Union
 
 from PyQt6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
-    QDateEdit,
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from deskcal.core.models import DatedTask, FloatingTask, Priority, RecurrenceRule, RecurrenceType
 from deskcal.core.storage import TaskStore
+from deskcal.ui.dialogs.date_field import DateField
 from deskcal.ui.dialogs.mini_calendar_picker import MiniCalendarPicker
+from deskcal.utils.icons import app_icon
 
 PRIORITY_COLORS = {
     Priority.RED: "#e53935",
@@ -43,8 +44,15 @@ RECURRENCE_ORDER = [
 RECURRENCE_LABELS = {
     RecurrenceType.ONCE: "单次",
     RecurrenceType.DAILY_RANGE: "范围每天",
-    RecurrenceType.WEEKLY: "每周几",
+    RecurrenceType.WEEKLY: "范围内每周几",
     RecurrenceType.SPECIFIC_DATES: "指定多日",
+}
+
+RECURRENCE_HINTS = {
+    RecurrenceType.ONCE: "仅在选定的这一天出现",
+    RecurrenceType.DAILY_RANGE: "从起始日期到终止日期之间每天都出现",
+    RecurrenceType.WEEKLY: "在起止日期范围内，每周选中的星期几出现",
+    RecurrenceType.SPECIFIC_DATES: "仅在你选择的具体日期出现",
 }
 
 WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]  # 对应 isoweekday 1..7
@@ -94,6 +102,7 @@ class TaskDialog(QDialog):
         self._specific_dates: list[date] = []
 
         self.setWindowTitle("编辑任务" if existing_task else "新建任务")
+        self.setWindowIcon(app_icon())
         self.setFixedWidth(320)
         self.setStyleSheet(DIALOG_QSS)
 
@@ -132,6 +141,7 @@ class TaskDialog(QDialog):
         self._date_section = QWidget()
         date_layout = QVBoxLayout(self._date_section)
         date_layout.setContentsMargins(0, 0, 0, 0)
+        date_layout.setSpacing(6)
 
         date_layout.addWidget(QLabel("周期类型"))
         self._recurrence_combo = QComboBox()
@@ -140,47 +150,73 @@ class TaskDialog(QDialog):
         self._recurrence_combo.currentIndexChanged.connect(self._on_recurrence_changed)
         date_layout.addWidget(self._recurrence_combo)
 
-        self._recurrence_stack = QStackedWidget()
+        self._recurrence_hint = QLabel()
+        self._recurrence_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        self._recurrence_hint.setWordWrap(True)
+        date_layout.addWidget(self._recurrence_hint)
+
+        # 不用 QStackedWidget：它会按所有页面里最高的那个撑高整体尺寸，改成手动 show/hide
+        # 让弹窗高度只跟随当前显示的那一页。
+        self._recurrence_pages_container = QWidget()
+        self._recurrence_pages_layout = QVBoxLayout(self._recurrence_pages_container)
+        self._recurrence_pages_layout.setContentsMargins(0, 0, 0, 0)
+        self._recurrence_pages: list[QWidget] = []
 
         once_widget = QWidget()
         once_layout = QVBoxLayout(once_widget)
-        self._once_date_edit = QDateEdit()
-        self._once_date_edit.setCalendarPopup(True)
+        once_layout.setContentsMargins(0, 4, 0, 0)
+        once_layout.setSpacing(4)
+        self._once_date_edit = DateField()
         once_layout.addWidget(self._once_date_edit)
-        self._recurrence_stack.addWidget(once_widget)
+        self._recurrence_pages_layout.addWidget(once_widget)
+        self._recurrence_pages.append(once_widget)
 
         range_widget = QWidget()
         range_layout = QVBoxLayout(range_widget)
+        range_layout.setContentsMargins(0, 4, 0, 0)
+        range_layout.setSpacing(4)
         range_layout.addWidget(QLabel("起始日期"))
-        self._range_start_edit = QDateEdit()
-        self._range_start_edit.setCalendarPopup(True)
+        self._range_start_edit = DateField()
         range_layout.addWidget(self._range_start_edit)
         range_layout.addWidget(QLabel("终止日期"))
-        self._range_end_edit = QDateEdit()
-        self._range_end_edit.setCalendarPopup(True)
+        self._range_end_edit = DateField()
         range_layout.addWidget(self._range_end_edit)
-        self._recurrence_stack.addWidget(range_widget)
+        self._recurrence_pages_layout.addWidget(range_widget)
+        self._recurrence_pages.append(range_widget)
 
         weekly_widget = QWidget()
         weekly_layout = QVBoxLayout(weekly_widget)
+        weekly_layout.setContentsMargins(0, 4, 0, 0)
+        weekly_layout.setSpacing(4)
+        weekly_layout.addWidget(QLabel("起始日期"))
+        self._weekly_start_edit = DateField()
+        weekly_layout.addWidget(self._weekly_start_edit)
+        weekly_layout.addWidget(QLabel("终止日期"))
+        self._weekly_end_edit = DateField()
+        weekly_layout.addWidget(self._weekly_end_edit)
         self._weekday_checks: list[QCheckBox] = []
         for label in WEEKDAY_LABELS:
             cb = QCheckBox(label)
             self._weekday_checks.append(cb)
             weekly_layout.addWidget(cb)
-        self._recurrence_stack.addWidget(weekly_widget)
+        self._recurrence_pages_layout.addWidget(weekly_widget)
+        self._recurrence_pages.append(weekly_widget)
 
         specific_widget = QWidget()
         specific_layout = QVBoxLayout(specific_widget)
+        specific_layout.setContentsMargins(0, 4, 0, 0)
+        specific_layout.setSpacing(4)
         self._specific_dates_label = QLabel("未选择日期")
         pick_btn = QPushButton("选择日期")
         pick_btn.clicked.connect(self._open_mini_calendar)
         specific_layout.addWidget(self._specific_dates_label)
         specific_layout.addWidget(pick_btn)
-        self._recurrence_stack.addWidget(specific_widget)
+        self._recurrence_pages_layout.addWidget(specific_widget)
+        self._recurrence_pages.append(specific_widget)
 
-        date_layout.addWidget(self._recurrence_stack)
+        date_layout.addWidget(self._recurrence_pages_container)
         layout.addWidget(self._date_section)
+        self._on_recurrence_changed(self._recurrence_combo.currentIndex())
 
         if self._floating:
             self._date_section.setVisible(False)
@@ -200,10 +236,26 @@ class TaskDialog(QDialog):
         layout.addLayout(button_row)
 
     def _on_recurrence_changed(self, index: int) -> None:
-        self._recurrence_stack.setCurrentIndex(index)
+        for page_index, page in enumerate(self._recurrence_pages):
+            page.setVisible(page_index == index)
+        rtype = self._recurrence_combo.itemData(index)
+        self._recurrence_hint.setText(RECURRENCE_HINTS[rtype])
+
+        # Qt 把窗口第一次撑到某个高度后会钉成 minimumSize，内容变矮也回不去，要先清掉上下限
+        # 再重新计算；processEvents() 是因为隐藏页面后的布局缓存要转一轮事件循环才会刷新。
+        # 算完用 setFixedHeight 钉死，顺带让高度也不能被用户手动拖拽（跟宽度一样）。
+        QApplication.processEvents()
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16_777_215)
+        self.layout().invalidate()
+        self.layout().activate()
+        self.resize(self.width(), self.sizeHint().height())
+        self.setFixedHeight(self.height())
 
     def _open_mini_calendar(self) -> None:
-        picker = MiniCalendarPicker(initial_dates=self._specific_dates, anchor_date=self._default_date, parent=self)
+        picker = MiniCalendarPicker(
+            initial_dates=self._specific_dates, anchor_date=self._default_date, mode="multi", parent=self
+        )
         if picker.exec() == QDialog.DialogCode.Accepted:
             self._specific_dates = picker.selected_dates()
             self._update_specific_dates_label()
@@ -231,13 +283,16 @@ class TaskDialog(QDialog):
             rule = self._existing_task.recurrence
             index = RECURRENCE_ORDER.index(rule.type)
             self._recurrence_combo.setCurrentIndex(index)
-            self._recurrence_stack.setCurrentIndex(index)
             if rule.type is RecurrenceType.ONCE:
                 self._once_date_edit.setDate(rule.date)
             elif rule.type is RecurrenceType.DAILY_RANGE:
                 self._range_start_edit.setDate(rule.start)
                 self._range_end_edit.setDate(rule.end)
             elif rule.type is RecurrenceType.WEEKLY:
+                if rule.start is not None:
+                    self._weekly_start_edit.setDate(rule.start)
+                if rule.end is not None:
+                    self._weekly_end_edit.setDate(rule.end)
                 for weekday in rule.weekdays:
                     self._weekday_checks[weekday - 1].setChecked(True)
             elif rule.type is RecurrenceType.SPECIFIC_DATES:
@@ -254,10 +309,10 @@ class TaskDialog(QDialog):
     def _build_recurrence_rule(self) -> Optional[RecurrenceRule]:
         rtype = self._recurrence_combo.currentData()
         if rtype is RecurrenceType.ONCE:
-            return RecurrenceRule(type=rtype, date=self._once_date_edit.date().toPyDate())
+            return RecurrenceRule(type=rtype, date=self._once_date_edit.date())
         if rtype is RecurrenceType.DAILY_RANGE:
-            start = self._range_start_edit.date().toPyDate()
-            end = self._range_end_edit.date().toPyDate()
+            start = self._range_start_edit.date()
+            end = self._range_end_edit.date()
             if start > end:
                 QMessageBox.warning(self, "日期错误", "起始日期不能晚于终止日期")
                 return None
@@ -267,7 +322,12 @@ class TaskDialog(QDialog):
             if not weekdays:
                 QMessageBox.warning(self, "未选择", "请至少选择一个星期")
                 return None
-            return RecurrenceRule(type=rtype, weekdays=weekdays)
+            start = self._weekly_start_edit.date()
+            end = self._weekly_end_edit.date()
+            if start > end:
+                QMessageBox.warning(self, "日期错误", "起始日期不能晚于终止日期")
+                return None
+            return RecurrenceRule(type=rtype, start=start, end=end, weekdays=weekdays)
         if rtype is RecurrenceType.SPECIFIC_DATES:
             if not self._specific_dates:
                 QMessageBox.warning(self, "未选择", "请至少选择一个日期")

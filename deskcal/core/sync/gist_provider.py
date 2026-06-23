@@ -13,7 +13,7 @@ from deskcal.core.sync import SyncProvider
 from deskcal.utils import crypto
 
 GIST_FILENAME = "deskcal_tasks.json"
-GIST_DESCRIPTION = "DeskCal 任务数据（自动同步，请勿手动编辑）"
+GIST_DESCRIPTION = "DeskToDo 任务数据（自动同步，请勿手动编辑）"
 API_BASE = "https://api.github.com"
 REQUEST_TIMEOUT_SECONDS = 15
 

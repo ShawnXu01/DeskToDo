@@ -5,5 +5,8 @@ __pycache__/
 build_output/
 dist/
 build/
+installer_output/
 *.spec
+!desktodo.spec
 .pytest_cache/
+docs/adjustment/
