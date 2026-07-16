@@ -99,3 +99,7 @@ python -m PyInstaller desktodo.spec --noconfirm
 
 - V1：本地日历 + Gist 多 PC 同步（已完成）
 - V2：飞书跨端协同（详见 `docs/v2-mobile-sync-plan.md`）
+
+## 许可证
+
+[MIT](LICENSE)
