@@ -2,7 +2,7 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "0.1"
+#define MyAppVersion "1.1"
 #define MyAppExeName "DeskToDo.exe"
 
 [Setup]
@@ -22,6 +22,8 @@ SetupIconFile=deskcal\assets\images\logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+CloseApplications=yes
+RestartApplications=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加选项："

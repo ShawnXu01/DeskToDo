@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPainter, QPixmap
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QDialog,
     QFileDialog,
@@ -607,6 +608,25 @@ class SyncTab(QWidget):
         save_btn.clicked.connect(self._save_token)
         layout.addWidget(save_btn)
 
+        gist_id_hint = QLabel(
+            "Gist ID（高级选项，一般不用填）：同一账号下多台电脑只要填同一个 Token，"
+            "会自动找到上一台电脑创建的那份数据并接上；只有当自动识别不到、或者你想强制指定"
+            "连到某一份具体的 Gist 时才需要在这里手动填。保存后也需要重启 DeskToDo 才会生效。"
+        )
+        gist_id_hint.setWordWrap(True)
+        layout.addWidget(gist_id_hint)
+        gist_id_row = QHBoxLayout()
+        self._gist_id_edit = QLineEdit(crypto.load_gist_id() or "")
+        gist_id_row.addWidget(self._gist_id_edit, 1)
+        copy_gist_id_btn = QPushButton("复制")
+        copy_gist_id_btn.clicked.connect(self._copy_gist_id)
+        gist_id_row.addWidget(copy_gist_id_btn)
+        layout.addLayout(gist_id_row)
+
+        save_gist_id_btn = QPushButton("保存 Gist ID")
+        save_gist_id_btn.clicked.connect(self._save_gist_id)
+        layout.addWidget(save_gist_id_btn)
+
         self._status_label = QLabel("尚未配置同步" if sync_manager is None else "等待下一次同步…")
         layout.addWidget(self._status_label)
 
@@ -624,13 +644,22 @@ class SyncTab(QWidget):
         if token:
             crypto.save_gist_token(token)
 
+    def _save_gist_id(self) -> None:
+        gist_id = self._gist_id_edit.text().strip()
+        if gist_id:
+            crypto.save_gist_id(gist_id)
+
+    def _copy_gist_id(self) -> None:
+        gist_id = self._gist_id_edit.text().strip() or crypto.load_gist_id() or ""
+        QApplication.clipboard().setText(gist_id)
+
 
 class AboutTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 0.1（开发中）")
+        label = QLabel("DeskToDo\n版本 1.1")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 

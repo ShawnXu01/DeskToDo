@@ -40,6 +40,12 @@ class GistSyncProvider(SyncProvider):
             self._gist_id = stored_id
             return self._gist_id
 
+        discovered_id = self._discover_existing_gist()
+        if discovered_id:
+            crypto.save_gist_id(discovered_id)
+            self._gist_id = discovered_id
+            return discovered_id
+
         response = requests.post(
             f"{API_BASE}/gists",
             headers=self._headers(),
@@ -55,6 +61,25 @@ class GistSyncProvider(SyncProvider):
         crypto.save_gist_id(gist_id)
         self._gist_id = gist_id
         return gist_id
+
+    def _discover_existing_gist(self) -> Optional[str]:
+        """本地没记到 gist_id 时，先看这个账号下是否已经有一个带着我们固定描述的 Gist 可以直接接上，
+        避免每台新电脑/重新引导都各自新建一个空 Gist 导致数据互不相通。"""
+        for page in range(1, 4):  # 最多翻 3 页（每页 100 条），覆盖绝大多数账号
+            response = requests.get(
+                f"{API_BASE}/gists",
+                headers=self._headers(),
+                params={"per_page": 100, "page": page},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            items = response.json()
+            for item in items:
+                if item.get("description") == GIST_DESCRIPTION and GIST_FILENAME in item.get("files", {}):
+                    return item["id"]
+            if len(items) < 100:
+                break
+        return None
 
     def pull(self) -> dict:
         gist_id = self.ensure_gist()

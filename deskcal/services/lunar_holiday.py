@@ -26,6 +26,40 @@ except ImportError:  # pragma: no cover
 HOLIDAYS_FILE_NAME = "holidays.json"
 _DEFAULT_HOLIDAYS_ASSET = Path(__file__).resolve().parent.parent / "assets" / "holidays_2026_default.json"
 
+# 公历固定日期的节日：大众国际节日 + 世界性纪念日（联合国/国际组织认定），
+# 替代 cnlunar 内置 otherHolidaysList 里那些中国政治人物纪念日和民间神诞日。
+_SOLAR_CURATED_HOLIDAYS: dict[tuple[int, int], str] = {
+    (2, 14): "情人节",
+    (2, 21): "国际母语日",
+    (3, 8): "国际妇女节",
+    (3, 22): "世界水日",
+    (4, 1): "愚人节",
+    (4, 7): "世界卫生日",
+    (4, 22): "世界地球日",
+    (6, 1): "儿童节",
+    (6, 5): "世界环境日",
+    (7, 20): "登月纪念日",
+    (9, 21): "国际和平日",
+    (10, 24): "联合国日",
+    (10, 31): "万圣节",
+    (12, 1): "世界艾滋病日",
+    (12, 10): "世界人权日",
+    (12, 24): "平安夜",
+    (12, 25): "圣诞节",
+}
+
+# 农历固定日期的中国传统节日（非法定，法定节假日走 holidays.json 导入）。
+_LUNAR_CURATED_HOLIDAYS: dict[tuple[int, int], str] = {
+    (1, 15): "元宵节",
+    (2, 2): "龙抬头",
+    (7, 7): "七夕",
+    (7, 15): "中元节",
+    (9, 9): "重阳节",
+    (12, 8): "腊八节",
+    (12, 23): "小年",
+    (12, 30): "除夕",
+}
+
 
 def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
     """weekday: 0=周一...6=周日；n: 第几个（从1开始）。"""
@@ -40,6 +74,8 @@ def get_formula_holiday(day: date) -> Optional[str]:
         return "母亲节"
     if day == _nth_weekday_of_month(day.year, 6, 6, 3):
         return "父亲节"
+    if day == _nth_weekday_of_month(day.year, 11, 3, 4):
+        return "感恩节"
     return None
 
 
@@ -100,8 +136,8 @@ def get_day_lunar_info(day: date) -> DayLunarInfo:
 
     festival_text = (
         lunar.get_legalHolidays()
-        or lunar.get_otherHolidays()
-        or lunar.get_otherLunarHolidays()
+        or _SOLAR_CURATED_HOLIDAYS.get((day.month, day.day))
+        or _LUNAR_CURATED_HOLIDAYS.get((lunar.lunarMonth, lunar.lunarDay))
         or None
     )
 

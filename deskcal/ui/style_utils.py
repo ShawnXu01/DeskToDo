@@ -27,9 +27,6 @@ class ElidingLabel(QLabel):
         self._full_text = text
         self._apply_elide()
 
-    def fullText(self) -> str:
-        return self._full_text
-
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elide()

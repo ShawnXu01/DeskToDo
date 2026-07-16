@@ -10,3 +10,5 @@ installer_output/
 !desktodo.spec
 .pytest_cache/
 docs/adjustment/
+*.log
+DeskToDo-Setup-*.exe
