@@ -60,6 +60,17 @@ def save_appearance(**fields) -> None:
     atomic_write_json(get_appearance_file(), payload)
 
 
+def get_main_tour_completed_version() -> int:
+    value = load_appearance().get("main_tour_completed_version", 0)
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def mark_main_tour_completed(version: int) -> None:
+    if version < 1:
+        raise ValueError("引导版本必须大于等于 1")
+    save_appearance(main_tour_completed_version=version)
+
+
 def _load_window_state_payload() -> dict:
     """读取 window_state.json；旧版本（单一一组 x/y/width/height）会迁移成按显示器签名分组的格式。"""
     path = get_window_state_file()
@@ -91,8 +102,9 @@ def save_window_geometry(
     y: int,
     width: int,
     height: int,
-    widget_area_width: int,
-    sidebar_width: int,
+    left_area_width: int,
+    left_top_ratio: float,
+    left_split_manual: bool,
 ) -> None:
     payload = _load_window_state_payload()
     payload["profiles"][signature] = {
@@ -100,8 +112,9 @@ def save_window_geometry(
         "y": y,
         "width": width,
         "height": height,
-        "widget_area_width": widget_area_width,
-        "sidebar_width": sidebar_width,
+        "left_area_width": left_area_width,
+        "left_top_ratio": left_top_ratio,
+        "left_split_manual": left_split_manual,
     }
     atomic_write_json(get_window_state_file(), payload)
 

@@ -2,7 +2,7 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "1.1"
+#define MyAppVersion "1.3"
 #define MyAppExeName "DeskToDo.exe"
 
 [Setup]

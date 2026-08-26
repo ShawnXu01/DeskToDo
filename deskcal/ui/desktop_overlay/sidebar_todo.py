@@ -1,22 +1,13 @@
-"""待办收纳侧栏：存放无具体日期的浮动任务，"待办/完成"两个 tab 是筛选视图，不是删除。"""
+"""浮动待办组件：存放无具体日期的任务，"待办/完成"两个 tab 是筛选视图，不是删除。"""
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QDialog,
-    QFrame,
-    QHBoxLayout,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from deskcal.core.models import FloatingTask
 from deskcal.core.storage import TaskStore
 from deskcal.ui.desktop_overlay.task_chip import TaskChipWidget
 from deskcal.ui.dialogs.task_dialog import PRIORITY_COLORS, TaskDialog
-from deskcal.ui.style_utils import make_scroll_area_transparent
 
 
 class SidebarTodo(QWidget):
@@ -49,15 +40,8 @@ class SidebarTodo(QWidget):
         self._list_layout = QVBoxLayout(self._list_container)
         self._list_layout.setContentsMargins(0, 0, 0, 0)
         self._list_layout.setSpacing(0)
-        self._list_layout.addStretch(1)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidget(self._list_container)
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        make_scroll_area_transparent(scroll_area)
-        layout.addWidget(scroll_area, 1)
+        self._list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._list_container)
 
         self.render()
 
@@ -78,7 +62,7 @@ class SidebarTodo(QWidget):
             self.render()
 
     def render(self) -> None:
-        while self._list_layout.count() > 1:
+        while self._list_layout.count():
             item = self._list_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
@@ -105,4 +89,4 @@ class SidebarTodo(QWidget):
                 self.render()
 
             chip.toggleCompleteRequested.connect(_on_toggle)
-            self._list_layout.insertWidget(self._list_layout.count() - 1, chip)
+            self._list_layout.addWidget(chip)

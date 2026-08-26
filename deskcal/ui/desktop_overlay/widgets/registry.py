@@ -16,6 +16,7 @@ from deskcal.core.storage import atomic_write_json, get_data_dir
 from deskcal.ui.desktop_overlay.widgets.clock_widget import ClockWidget, default_clock_config
 from deskcal.ui.desktop_overlay.widgets.countdown_widget import CountdownWidget, default_countdown_config
 from deskcal.ui.desktop_overlay.widgets.progress_widget import ProgressWidget, default_progress_config
+from deskcal.ui.desktop_overlay.widgets.schedule_widget import ScheduleWidget, default_schedule_config
 from deskcal.ui.desktop_overlay.widgets.weather_widget import WeatherWidget, default_weather_config
 
 WIDGETS_FILE_NAME = "widgets.json"
@@ -25,7 +26,7 @@ WIDGETS_FILE_NAME = "widgets.json"
 class WidgetDefinition:
     type_id: str
     display_name: str
-    widget_class: Callable[..., QWidget]  # (config: dict, parent=None) -> QWidget
+    widget_class: Optional[Callable[..., QWidget]]  # 特殊组件可由桌面层接管构造
     default_config: Callable[[], dict]
     configurable: bool  # False 表示没有可设置项（如时钟），配置面板里"设置"按钮应禁用
 
@@ -34,10 +35,12 @@ WIDGET_DEFINITIONS: dict[str, WidgetDefinition] = {
     "clock": WidgetDefinition("clock", "时钟", ClockWidget, default_clock_config, configurable=False),
     "countdown": WidgetDefinition("countdown", "倒计时", CountdownWidget, default_countdown_config, configurable=True),
     "weather": WidgetDefinition("weather", "天气", WeatherWidget, default_weather_config, configurable=True),
+    "floating_todo": WidgetDefinition("floating_todo", "无日期待办", None, dict, configurable=False),
+    "schedule": WidgetDefinition("schedule", "课表", ScheduleWidget, default_schedule_config, configurable=True),
     "progress": WidgetDefinition("progress", "进度条", ProgressWidget, default_progress_config, configurable=True),
 }
 
-DEFAULT_ORDER = ["clock", "countdown", "weather", "progress"]
+DEFAULT_ORDER = ["clock", "weather", "floating_todo", "countdown", "progress", "schedule"]
 
 
 @dataclass
@@ -76,6 +79,22 @@ class WidgetConfigStore:
         with open(self.file_path, "r", encoding="utf-8") as f:
             raw = json.load(f)
         self.items = [WidgetInstanceConfig.from_dict(item) for item in raw.get("widgets", [])]
+        existing_type_ids = {item.type_id for item in self.items}
+        for type_id in DEFAULT_ORDER:
+            if type_id not in existing_type_ids:
+                new_item = WidgetInstanceConfig(
+                    type_id=type_id,
+                    config=WIDGET_DEFINITIONS[type_id].default_config(),
+                )
+                if type_id == "floating_todo":
+                    weather_index = next(
+                        (index for index, item in enumerate(self.items) if item.type_id == "weather"),
+                        None,
+                    )
+                    if weather_index is not None:
+                        self.items.insert(weather_index + 1, new_item)
+                        continue
+                self.items.append(new_item)
 
     def save(self) -> None:
         payload = {"widgets": [item.to_dict() for item in self.items]}
@@ -93,6 +112,13 @@ class WidgetConfigStore:
         if index >= len(self.items) - 1:
             return
         self.items[index + 1], self.items[index] = self.items[index], self.items[index + 1]
+
+    def reorder(self, type_ids: list[str]) -> None:
+        """按完整的组件类型列表重排；列表缺失或重复时拒绝写入。"""
+        if len(type_ids) != len(self.items) or set(type_ids) != {item.type_id for item in self.items}:
+            raise ValueError("组件顺序必须完整且不能包含重复项")
+        items_by_type = {item.type_id: item for item in self.items}
+        self.items = [items_by_type[type_id] for type_id in type_ids]
 
     def set_enabled(self, index: int, enabled: bool) -> None:
         self.items[index].enabled = enabled

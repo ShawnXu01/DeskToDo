@@ -36,12 +36,57 @@ def test_save_and_reload_round_trip(tmp_store):
     assert reloaded.items[1].config["items"][0]["title"] == "AAAI"
 
 
+def test_existing_config_is_migrated_with_new_widget(tmp_path):
+    file_path = tmp_path / "widgets.json"
+    file_path.write_text(
+        '{"widgets": [{"type_id": "clock", "enabled": true, "config": {}}]}',
+        encoding="utf-8",
+    )
+
+    store = WidgetConfigStore(file_path=file_path)
+    store.load()
+
+    assert [item.type_id for item in store.items] == [
+        "clock",
+        "weather",
+        "floating_todo",
+        "countdown",
+        "progress",
+        "schedule",
+    ]
+    floating_todo = next(item for item in store.items if item.type_id == "floating_todo")
+    assert floating_todo.enabled is True
+    assert floating_todo.config == {}
+    schedule = next(item for item in store.items if item.type_id == "schedule")
+    assert schedule.enabled is True
+    assert schedule.config == {
+        "show_weekends": False,
+        "time_format": "12h",
+        "notifications_enabled": False,
+        "reminder_minutes": 20,
+    }
+
+
 def test_enabled_items_filters_disabled(tmp_store):
     tmp_store.load()
     tmp_store.set_enabled(0, False)
     enabled_ids = [item.type_id for item in tmp_store.enabled_items()]
     assert DEFAULT_ORDER[0] not in enabled_ids
     assert len(enabled_ids) == len(DEFAULT_ORDER) - 1
+
+
+def test_floating_todo_can_be_disabled_without_changing_its_config(tmp_store):
+    tmp_store.load()
+    index = next(i for i, item in enumerate(tmp_store.items) if item.type_id == "floating_todo")
+
+    tmp_store.set_enabled(index, False)
+    tmp_store.save()
+
+    reloaded = WidgetConfigStore(file_path=tmp_store.file_path)
+    reloaded.load()
+    floating_todo = next(item for item in reloaded.items if item.type_id == "floating_todo")
+    assert floating_todo.enabled is False
+    assert floating_todo.config == {}
 
 
 def test_move_up_swaps_with_previous(tmp_store):
@@ -64,3 +109,19 @@ def test_move_down_at_bottom_is_noop(tmp_store):
     original = [item.type_id for item in tmp_store.items]
     tmp_store.move_down(len(original) - 1)
     assert [item.type_id for item in tmp_store.items] == original
+
+
+def test_reorder_uses_complete_type_id_order(tmp_store):
+    tmp_store.load()
+    requested = ["clock", "weather", "countdown", "progress", "floating_todo", "schedule"]
+
+    tmp_store.reorder(requested)
+
+    assert [item.type_id for item in tmp_store.items] == requested
+
+
+def test_reorder_rejects_incomplete_order(tmp_store):
+    tmp_store.load()
+
+    with pytest.raises(ValueError, match="必须完整"):
+        tmp_store.reorder(["clock", "weather"])

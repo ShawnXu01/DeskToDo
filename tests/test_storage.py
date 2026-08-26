@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pytest
 
 from deskcal.core.models import DatedTask, FloatingTask, Priority, RecurrenceRule, RecurrenceType
+from deskcal.core import storage
 from deskcal.core.storage import TaskStore
 
 
@@ -95,3 +96,34 @@ def test_get_task_finds_in_either_collection(tmp_store):
     assert tmp_store.get_task(dated.id) is dated
     assert tmp_store.get_task(floating.id) is floating
     assert tmp_store.get_task("不存在") is None
+
+
+def test_window_geometry_saves_new_left_split_fields(tmp_path, monkeypatch):
+    state_file = tmp_path / "window_state.json"
+    monkeypatch.setattr(storage, "get_window_state_file", lambda: state_file)
+
+    storage.save_window_geometry("monitor", 10, 20, 1100, 700, 420, 0.58, True)
+
+    profile = storage.load_window_geometry("monitor")
+    assert profile["left_area_width"] == 420
+    assert profile["left_top_ratio"] == 0.58
+    assert profile["left_split_manual"] is True
+    assert "widget_area_width" not in profile
+    assert "sidebar_width" not in profile
+
+
+def test_main_tour_version_is_independent_and_persisted(tmp_path, monkeypatch):
+    appearance_file = tmp_path / "appearance.json"
+    monkeypatch.setattr(storage, "get_appearance_file", lambda: appearance_file)
+
+    assert storage.get_main_tour_completed_version() == 0
+
+    storage.mark_main_tour_completed(1)
+
+    assert storage.get_main_tour_completed_version() == 1
+    assert storage.load_appearance()["main_tour_completed_version"] == 1
+
+
+def test_main_tour_rejects_invalid_version():
+    with pytest.raises(ValueError):
+        storage.mark_main_tour_completed(0)

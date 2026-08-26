@@ -83,8 +83,9 @@ class DayCellWidget(QFrame):
         special_label = get_special_day_label(day)
         lunar_text = special_label or lunar_info.festival_text or lunar_info.lunar_text
         lunar_label = ElidingLabel(lunar_text)
+        is_holiday_label = bool(special_label or lunar_info.festival_text)
         lunar_label.setStyleSheet(
-            f"color: {'#ffd54f' if special_label else '#cccccc'}; font-size: 11px; font-weight: bold;"
+            f"color: {'#ffd54f' if is_holiday_label else '#cccccc'}; font-size: 11px; font-weight: bold;"
         )
         lunar_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         # Ignored 让某一天的长文字不会把所在列顶宽；stretch=1 仍然给它格子里剩余的全部宽度。
@@ -260,3 +261,11 @@ class CalendarGrid(QWidget):
     def _save_and_rerender(self) -> None:
         self._store.save()
         self.render()
+
+    def tour_target_cell(self) -> DayCellWidget | None:
+        """返回适合首次引导聚光的日期格，优先使用今天。"""
+        today = date.today()
+        return next(
+            (cell for cell in self._day_cells if cell._day == today),
+            next((cell for cell in self._day_cells if cell._is_current_month), None),
+        )

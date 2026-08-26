@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import sys
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from deskcal.core.storage import TaskStore, load_appearance
 from deskcal.services import autostart
 from deskcal.services.lunar_holiday import ensure_default_holidays_seeded
+from deskcal.services.schedule_reminder import ScheduleReminderService
 from deskcal.tray.tray_icon import TrayIcon
 from deskcal.ui.desktop_overlay.overlay_window import OverlayWindow
 from deskcal.ui.desktop_overlay.widgets.registry import WidgetConfigStore
@@ -40,6 +42,9 @@ def main() -> None:
 
     tray = TrayIcon(window)
     tray.show()
+    reminders = ScheduleReminderService(tray.show_course_reminder, parent=tray)
+    reminders.start()
+    QTimer.singleShot(700, window.maybe_start_guided_tour)
 
     if load_appearance()["autostart_enabled"]:
         autostart.enable_autostart()

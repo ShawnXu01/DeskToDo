@@ -1,0 +1,5 @@
+course_code,course_title,instructor,location,weekdays,start_time,end_time,notes
+TEST101A,TEST - Fields and Waves,Test Instructor 1,TEST Room 101,1|3|5,13:00,13:50,TEST DATA; scheduled course 1
+TEST102A,TEST - Online Course,Test Instructor 2,TEST ONL,,,,TEST DATA; 无固定时间
+TEST103A,TEST - Digital Signal Processing,Test Instructor 3,TEST Room 103,1|3|5,15:00,15:50,TEST DATA; scheduled course 2
+TEST104A,TEST - Semiconductor Electronics,Test Instructor 4,TEST Room 104,1|3|5,11:00,11:50,TEST DATA; scheduled course 3

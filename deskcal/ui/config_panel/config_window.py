@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPainter, QPixmap
+from PyQt6.QtCore import QPoint, QSize, QTimer, Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -29,46 +27,109 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from deskcal.core.storage import get_data_dir, list_window_profiles, load_appearance, save_appearance
+from deskcal.core.storage import list_window_profiles, load_appearance, save_appearance
 from deskcal.services import autostart
 from deskcal.services.lunar_holiday import get_holidays_file
 from deskcal.services.sync_manager import SyncManager
 from deskcal.ui.desktop_overlay.widgets.registry import WIDGET_DEFINITIONS, WidgetConfigStore
 from deskcal.ui.dialogs.date_field import DateField
+from deskcal.ui.schedule.schedule_settings import ScheduleSettingsDialog
 from deskcal.ui.style_utils import ElidingLabel
 from deskcal.utils import crypto
 from deskcal.utils.icons import app_icon
 from deskcal.utils.monitor import compute_monitor_signature
 
-_BACKGROUND_IMAGE_PATH = Path(__file__).resolve().parents[2] / "assets" / "images" / "config_background.png"
-
 CONFIG_WINDOW_QSS = (
     """
-QWidget { color: #ffffff; }
-QLabel { background: transparent; }
-QDialog { background-color: #1a1a1a; }
-QPushButton {
-    background-color: rgba(255, 255, 255, 30);
-    color: #ffffff;
-    border: none;
-    border-radius: 4px;
-    padding: 4px 10px;
+QWidget {
+    color: #f4f4f4;
+    font-family: "Microsoft YaHei UI";
+    font-size: 13px;
 }
-QPushButton:hover { background-color: rgba(255, 255, 255, 60); }
-QPushButton:checked { background-color: rgba(255, 255, 255, 90); }
+QWidget#settingsWindow, QDialog { background-color: #191919; }
+QFrame#settingsSidebar { background-color: #202020; border-right: 1px solid #363636; }
+QFrame#settingsContent { background-color: #191919; }
+QLabel { background: transparent; }
+QLabel#settingsBrand { color: #ffffff; font-size: 20px; font-weight: 700; }
+QLabel#settingsCaption, QLabel#settingsSubtitle { color: #a9a9a9; }
+QLabel#settingsTitle { color: #ffffff; font-size: 20px; font-weight: 700; }
+QFrame#settingsDivider { background-color: #333333; border: none; }
+QPushButton {
+    min-height: 34px;
+    background-color: #2b2b2b;
+    color: #f4f4f4;
+    border: 1px solid #454545;
+    border-radius: 6px;
+    padding: 0 14px;
+}
+QPushButton:hover { background-color: #363636; border-color: #5a5a5a; }
+QPushButton:pressed { background-color: #242424; }
+QPushButton:checked { background-color: #123d70; border-color: #2865a8; }
+QPushButton:disabled { color: #707070; background-color: #222222; border-color: #303030; }
 QLineEdit, QTimeEdit {
-    background-color: rgba(255, 255, 255, 30);
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 60);
-    border-radius: 4px;
-    padding: 2px 4px;
+    min-height: 34px;
+    background-color: #242424;
+    color: #f4f4f4;
+    border: 1px solid #454545;
+    border-radius: 6px;
+    padding: 0 10px;
 }
 QListWidget {
-    background-color: rgba(0, 0, 0, 80);
-    color: #ffffff;
-    border: none;
+    background-color: #222222;
+    color: #f4f4f4;
+    border: 1px solid #383838;
+    border-radius: 8px;
+    outline: none;
 }
-QListWidget::item:selected { background-color: rgba(255, 255, 255, 60); }
+QListWidget::item { min-height: 38px; padding: 0 10px; }
+QListWidget::item:selected { background-color: #123d70; color: #ffffff; }
+QListWidget#settingsNav { background: transparent; border: none; border-radius: 0; }
+QListWidget#settingsNav::item {
+    min-height: 48px;
+    padding: 0 14px;
+    margin: 2px 0;
+    border-radius: 8px;
+    color: #cccccc;
+}
+QListWidget#settingsNav::item:hover { background-color: #2b2b2b; color: #ffffff; }
+QListWidget#settingsNav::item:selected { background-color: #123d70; color: #ffffff; }
+QFrame#widgetSettingsRow {
+    min-height: 68px;
+    background-color: #222222;
+    border: 1px solid #363636;
+    border-radius: 8px;
+}
+QListWidget#widgetSettingsList { background: transparent; border: none; border-radius: 0; }
+QListWidget#widgetSettingsList::item {
+    min-height: 76px;
+    padding: 0;
+    margin: 0 0 8px 0;
+    background: transparent;
+}
+QListWidget#widgetSettingsList::item:selected { background: transparent; }
+QLabel#dragHandle { color: #777777; font-size: 18px; padding: 0 4px; }
+QLabel#widgetDescription { color: #9f9f9f; font-size: 11px; }
+QFrame#widgetPreview {
+    min-width: 172px;
+    max-width: 172px;
+    min-height: 42px;
+    background-color: #181818;
+    border: 1px solid #343434;
+    border-radius: 6px;
+}
+QLabel#previewCaption { color: #888888; font-size: 10px; }
+QLabel#previewValue { color: #ededed; font-size: 12px; font-weight: 600; }
+QCheckBox { spacing: 9px; }
+QCheckBox::indicator { width: 18px; height: 18px; }
+QSlider::groove:horizontal { height: 5px; background: #3a3a3a; border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #2865a8; border-radius: 2px; }
+QSlider::handle:horizontal {
+    width: 18px;
+    margin: -7px 0;
+    background: #f4f4f4;
+    border: 2px solid #2865a8;
+    border-radius: 9px;
+}
 """
 )
 
@@ -288,7 +349,89 @@ SETTINGS_DIALOGS = {
     "weather": WeatherSettingsDialog,
     "countdown": CountdownSettingsDialog,
     "progress": ProgressSettingsDialog,
+    "schedule": ScheduleSettingsDialog,
 }
+
+
+_WIDGET_DESCRIPTIONS = {
+    "clock": "当前时间，每秒自动更新",
+    "weather": "当前天气与未来几日预报",
+    "floating_todo": "集中显示没有日期的待办",
+    "countdown": "跟踪临近事件的剩余时间",
+    "progress": "查看长期目标的完成进度",
+    "schedule": "查看当前学期的周课表",
+}
+
+
+class _DragHandle(QLabel):
+    def __init__(self, begin_drag: Callable[[], None], parent=None):
+        super().__init__("⋮⋮", parent)
+        self.setObjectName("dragHandle")
+        self.setToolTip("按住并拖动以调整桌面顺序")
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self._begin_drag = begin_drag
+        self._press_position: Optional[QPoint] = None
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_position = event.position().toPoint()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._press_position is not None:
+            distance = (event.position().toPoint() - self._press_position).manhattanLength()
+            if distance >= QApplication.startDragDistance():
+                self._press_position = None
+                self._begin_drag()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._press_position = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        super().mouseReleaseEvent(event)
+
+
+class _WidgetPreview(QFrame):
+    def __init__(self, type_id: str, config: dict, parent=None):
+        super().__init__(parent)
+        self.setObjectName("widgetPreview")
+        self._type_id = type_id
+        self._config = config
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(0)
+        caption = QLabel("实时预览")
+        caption.setObjectName("previewCaption")
+        self._value = ElidingLabel()
+        self._value.setObjectName("previewValue")
+        layout.addWidget(caption)
+        layout.addWidget(self._value)
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._refresh)
+        self._timer.start(1_000 if type_id == "clock" else 60_000)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if self._type_id == "clock":
+            text = datetime.now().strftime("%H:%M:%S")
+        elif self._type_id == "weather":
+            text = "城市已配置" if self._config.get("location") else "尚未设置城市"
+        elif self._type_id == "floating_todo":
+            text = "无日期待办列表"
+        elif self._type_id == "countdown":
+            items = self._config.get("items", [])
+            text = f"{len(items)} 个倒计时" if items else "暂无倒计时"
+        elif self._type_id == "progress":
+            items = self._config.get("items", [])
+            text = f"{len(items)} 个长期目标" if items else "暂无长期目标"
+        else:
+            time_format = "24 小时" if self._config.get("time_format") == "24h" else "12 小时"
+            weekends = "显示周末" if self._config.get("show_weekends") else "工作日课表"
+            text = f"{time_format} · {weekends}"
+        self._value.setText(text)
 
 
 class WidgetsTab(QWidget):
@@ -298,65 +441,85 @@ class WidgetsTab(QWidget):
         self._on_changed = on_changed
 
         self._layout = QVBoxLayout(self)
-        self._rows_container = QVBoxLayout()
-        self._layout.addLayout(self._rows_container)
-        self._layout.addStretch(1)
-        self._layout.addWidget(_build_construction_notice())
-        self._layout.addStretch(1)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(10)
+
+        hint = QLabel("按住左侧拖动手柄调整顺序，桌面会立即同步更新。")
+        hint.setObjectName("settingsSubtitle")
+        self._layout.addWidget(hint)
+
+        self._list = QListWidget()
+        self._list.setObjectName("widgetSettingsList")
+        self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._list.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self._list.setDropIndicatorShown(True)
+        self._list.model().rowsMoved.connect(self._on_rows_moved)
+        self._layout.addWidget(self._list, 1)
 
         self.render()
 
     def render(self) -> None:
-        while self._rows_container.count():
-            item = self._rows_container.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        self._list.clear()
 
         for index, instance in enumerate(self._store.items):
             definition = WIDGET_DEFINITIONS[instance.type_id]
 
-            row = QWidget()
+            row = QFrame()
+            row.setObjectName("widgetSettingsRow")
+            row.setFixedHeight(68)
             row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(12, 7, 10, 7)
+            row_layout.setSpacing(8)
+
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, instance.type_id)
+            item.setSizeHint(QSize(0, 76))
+            self._list.addItem(item)
+
+            drag_handle = _DragHandle(lambda list_item=item: self._begin_drag(list_item))
+            row_layout.addWidget(drag_handle)
 
             enabled_checkbox = QPushButton("已启用" if instance.enabled else "已关闭")
+            enabled_checkbox.setMinimumWidth(74)
             enabled_checkbox.setCheckable(True)
             enabled_checkbox.setChecked(instance.enabled)
             enabled_checkbox.toggled.connect(lambda checked, i=index: self._toggle_enabled(i, checked))
             row_layout.addWidget(enabled_checkbox)
 
+            text_column = QVBoxLayout()
+            text_column.setSpacing(1)
             name_label = QLabel(definition.display_name)
-            row_layout.addWidget(name_label, 1)
+            description = QLabel(_WIDGET_DESCRIPTIONS[instance.type_id])
+            description.setObjectName("widgetDescription")
+            text_column.addWidget(name_label)
+            text_column.addWidget(description)
+            row_layout.addLayout(text_column, 1)
 
-            up_btn = QPushButton("上移")
-            up_btn.clicked.connect(lambda _checked=False, i=index: self._move_up(i))
-            row_layout.addWidget(up_btn)
-
-            down_btn = QPushButton("下移")
-            down_btn.clicked.connect(lambda _checked=False, i=index: self._move_down(i))
-            row_layout.addWidget(down_btn)
+            row_layout.addWidget(_WidgetPreview(instance.type_id, instance.config))
 
             settings_btn = QPushButton("设置")
             settings_btn.setEnabled(definition.configurable)
             settings_btn.clicked.connect(lambda _checked=False, i=index: self._open_settings(i))
             row_layout.addWidget(settings_btn)
 
-            self._rows_container.addWidget(row)
+            self._list.setItemWidget(item, row)
+
+    def _begin_drag(self, item: QListWidgetItem) -> None:
+        self._list.setCurrentItem(item)
+        self._list.startDrag(Qt.DropAction.MoveAction)
+
+    def _on_rows_moved(self, *_args) -> None:
+        type_ids = [
+            self._list.item(index).data(Qt.ItemDataRole.UserRole)
+            for index in range(self._list.count())
+        ]
+        self._store.reorder(type_ids)
+        self._store.save()
+        self._on_changed()
+        QTimer.singleShot(0, self.render)
 
     def _toggle_enabled(self, index: int, checked: bool) -> None:
         self._store.set_enabled(index, checked)
-        self._store.save()
-        self._on_changed()
-        self.render()
-
-    def _move_up(self, index: int) -> None:
-        self._store.move_up(index)
-        self._store.save()
-        self._on_changed()
-        self.render()
-
-    def _move_down(self, index: int) -> None:
-        self._store.move_down(index)
         self._store.save()
         self._on_changed()
         self.render()
@@ -374,23 +537,20 @@ class WidgetsTab(QWidget):
 
 
 class UISettingsTab(QWidget):
-    """界面外观调整：日历悬浮窗背板透明度 + 设置界面自己的背景图/背板透明度。"""
+    """界面外观调整：日历悬浮窗背板透明度与启动行为。"""
 
     def __init__(
         self,
         current_panel_alpha: int,
         on_panel_alpha_changed: Callable[[int], None],
-        current_config_panel_alpha: int,
-        on_config_panel_alpha_changed: Callable[[int], None],
-        on_config_background_changed: Callable[[Optional[str]], None],
         parent=None,
     ):
         super().__init__(parent)
         self._on_panel_alpha_changed = on_panel_alpha_changed
-        self._on_config_panel_alpha_changed = on_config_panel_alpha_changed
-        self._on_config_background_changed = on_config_background_changed
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
         layout.addWidget(QLabel("日历悬浮窗背板透明度"))
 
         row = QHBoxLayout()
@@ -402,23 +562,6 @@ class UISettingsTab(QWidget):
         row.addWidget(self._slider, 1)
         row.addWidget(self._value_label)
         layout.addLayout(row)
-
-        layout.addWidget(QLabel("设置界面背板透明度"))
-
-        config_row = QHBoxLayout()
-        self._config_slider = QSlider(Qt.Orientation.Horizontal)
-        self._config_slider.setRange(0, 100)
-        self._config_slider.setValue(round(current_config_panel_alpha / 255 * 100))
-        self._config_value_label = QLabel(f"{self._config_slider.value()}%")
-        self._config_slider.valueChanged.connect(self._on_config_slider_changed)
-        config_row.addWidget(self._config_slider, 1)
-        config_row.addWidget(self._config_value_label)
-        layout.addLayout(config_row)
-
-        layout.addWidget(QLabel("设置界面背景图"))
-        upload_btn = QPushButton("上传背景图...")
-        upload_btn.clicked.connect(self._upload_background)
-        layout.addWidget(upload_btn)
 
         self._autostart_checkbox = QCheckBox("开机自动启动")
         self._autostart_checkbox.setChecked(load_appearance()["autostart_enabled"])
@@ -439,24 +582,6 @@ class UISettingsTab(QWidget):
         alpha = round(percent / 100 * 255)
         self._on_panel_alpha_changed(alpha)
 
-    def _on_config_slider_changed(self, percent: int) -> None:
-        self._config_value_label.setText(f"{percent}%")
-        alpha = round(percent / 100 * 255)
-        self._on_config_panel_alpha_changed(alpha)
-
-    def _upload_background(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择背景图", "", "图片文件 (*.png *.jpg *.jpeg *.bmp)")
-        if not file_path:
-            return
-        suffix = Path(file_path).suffix
-        dest = get_data_dir() / f"custom_config_background{suffix}"
-        try:
-            dest.write_bytes(Path(file_path).read_bytes())
-        except OSError as exc:
-            QMessageBox.warning(self, "上传失败", f"无法读取或保存图片：{exc}")
-            return
-        self._on_config_background_changed(str(dest))
-
 
 class HolidayInfoTab(QWidget):
     """法定节假日每年安排不同，需要用户自行下载当年数据导入；母亲节/父亲节等公式类特殊日期不需要导入，自动计算。"""
@@ -468,12 +593,12 @@ class HolidayInfoTab(QWidget):
         layout = QVBoxLayout(self)
         hint = QLabel(
             "法定节假日（春节、国庆节等）每年的具体安排由国务院每年发布，程序内置了发布时已知年份的"
-            "默认数据，但以后年份需要你自己更新。\n\n"
+            "默认数据；美国报税截止日等受年度公告影响的重要日期也使用同一份数据，但以后年份需要你自己更新。\n\n"
             "获取方式：搜索“国务院办公厅 关于 X 年部分节假日安排的通知”（新华社/中国政府网会发布），"
-            "整理成如下格式的 JSON 文件（日期: 节日名）：\n\n"
-            '{\n  "2027-01-01": "元旦",\n  "2027-05-01": "劳动节"\n}\n\n'
+            "同时从对应政府官网核对美国年度日期，统一整理成如下格式的 JSON 文件（日期: 名称）：\n\n"
+            '{\n  "2026-01-01": "元旦",\n  "2026-04-15": "美国报税截止日",\n  "2026-05-01": "劳动节"\n}\n\n'
             "整理好后点击下面的按钮选择该文件导入即可，日历会立即按新数据显示。\n"
-            "（母亲节、父亲节等按公式计算的特殊日期不受影响，不需要导入。）"
+            "（感恩节、黑色星期五等按公式计算的日期不受影响，不需要导入。）"
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -525,7 +650,7 @@ class MonitorSettingsTab(QWidget):
     实心暗色块写法，颜色完全自己说了算。
     """
 
-    COLUMNS = ["显示器签名", "X", "Y", "宽度", "高度", "组件区宽度", "侧栏宽度"]
+    COLUMNS = ["显示器签名", "X", "Y", "宽度", "高度", "左侧宽度", "上区比例"]
     COLUMN_STRETCH = [3, 1, 1, 1, 1, 1, 1]
 
     def __init__(self, parent=None):
@@ -534,7 +659,7 @@ class MonitorSettingsTab(QWidget):
         layout = QVBoxLayout(self)
         hint = QLabel(
             "DeskToDo 会按你当前接的显示器组合（比如单独用笔记本屏幕、还是外接了别的显示器）"
-            "自动记住悬浮窗的位置、大小和组件区宽度。换一套显示器组合时会自动套用对应记录；"
+            "自动记住悬浮窗的位置、大小、左侧宽度和上下区域比例。换一套显示器组合时会自动套用对应记录；"
             "新组合第一次出现时还没有记录，会先用默认位置，你调整好之后会自动记下来，"
             "下次换回这套组合就会自动恢复。"
         )
@@ -577,8 +702,12 @@ class MonitorSettingsTab(QWidget):
                 geometry.get("y"),
                 geometry.get("width"),
                 geometry.get("height"),
-                geometry.get("widget_area_width"),
-                geometry.get("sidebar_width"),
+                geometry.get("left_area_width", "旧版布局"),
+                (
+                    f"{geometry['left_top_ratio']:.0%}"
+                    if isinstance(geometry.get("left_top_ratio"), (int, float))
+                    else "旧版布局"
+                ),
             ]
             for col, value in enumerate(values):
                 self._grid.addWidget(self._make_cell(str(value)), row, col)
@@ -659,7 +788,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.1")
+        label = QLabel("DeskToDo\n版本 1.3")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
@@ -669,6 +798,15 @@ class AboutTab(QWidget):
 
 
 class ConfigWindow(QWidget):
+    _PAGE_INFO = [
+        ("桌面组件", "启用、排序和配置桌面上的信息模块"),
+        ("UI 调整", "调整主界面外观与启动行为"),
+        ("数据同步", "管理 GitHub Gist 同步与连接状态"),
+        ("节假日信息", "导入按年份维护的节假日数据"),
+        ("显示屏设置", "查看不同显示器组合保存的布局"),
+        ("关于", "查看版本与应用信息"),
+    ]
+
     def __init__(
         self,
         store: WidgetConfigStore,
@@ -683,31 +821,66 @@ class ConfigWindow(QWidget):
         self.setWindowTitle("DeskToDo 设置")
         self.setWindowIcon(app_icon())
         self.setWindowFlags(Qt.WindowType.Window)
-        self.resize(700, 500)
+        self.setObjectName("settingsWindow")
+        self.resize(860, 600)
+        self.setMinimumSize(760, 520)
         self.setStyleSheet(CONFIG_WINDOW_QSS)
 
-        appearance = load_appearance()
-        self._config_panel_alpha = appearance["config_panel_alpha"]
-        self._load_background(appearance.get("config_background_path"))
-
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        nav_list = QListWidget()
-        nav_list.addItems(["桌面组件", "UI调整", "数据同步", "节假日信息", "显示屏设置", "关于"])
-        nav_list.setFixedWidth(140)
-        layout.addWidget(nav_list)
+        sidebar = QFrame()
+        sidebar.setObjectName("settingsSidebar")
+        sidebar.setFixedWidth(200)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(18, 28, 18, 22)
+        sidebar_layout.setSpacing(0)
+
+        brand = QLabel("DeskToDo")
+        brand.setObjectName("settingsBrand")
+        sidebar_layout.addWidget(brand)
+        caption = QLabel("设置")
+        caption.setObjectName("settingsCaption")
+        sidebar_layout.addWidget(caption)
+        sidebar_layout.addSpacing(24)
+
+        self._nav_list = QListWidget()
+        self._nav_list.setObjectName("settingsNav")
+        self._nav_list.addItems([title for title, _subtitle in self._PAGE_INFO])
+        self._nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sidebar_layout.addWidget(self._nav_list)
+        layout.addWidget(sidebar)
+
+        content = QFrame()
+        content.setObjectName("settingsContent")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(30, 26, 30, 26)
+        content_layout.setSpacing(0)
+
+        self._page_title = QLabel()
+        self._page_title.setObjectName("settingsTitle")
+        content_layout.addWidget(self._page_title)
+        self._page_subtitle = QLabel()
+        self._page_subtitle.setObjectName("settingsSubtitle")
+        content_layout.addWidget(self._page_subtitle)
+        content_layout.addSpacing(18)
+
+        divider = QFrame()
+        divider.setObjectName("settingsDivider")
+        divider.setFixedHeight(1)
+        content_layout.addWidget(divider)
+        content_layout.addSpacing(22)
 
         self._stack = QStackedWidget()
-        layout.addWidget(self._stack, 1)
+        content_layout.addWidget(self._stack, 1)
+        layout.addWidget(content, 1)
 
         self._stack.addWidget(WidgetsTab(store, on_widgets_changed))
         self._stack.addWidget(
             UISettingsTab(
                 current_panel_alpha,
                 on_panel_alpha_changed or (lambda alpha: None),
-                self._config_panel_alpha,
-                self._on_config_panel_alpha_changed,
-                self._on_config_background_changed,
             )
         )
         self._stack.addWidget(SyncTab(sync_manager))
@@ -715,35 +888,13 @@ class ConfigWindow(QWidget):
         self._stack.addWidget(MonitorSettingsTab())
         self._stack.addWidget(AboutTab())
 
-        nav_list.currentRowChanged.connect(self._stack.setCurrentIndex)
-        nav_list.setCurrentRow(0)
+        self._nav_list.currentRowChanged.connect(self._on_page_changed)
+        self._nav_list.setCurrentRow(0)
 
-    def _load_background(self, custom_path: Optional[str]) -> None:
-        path = Path(custom_path) if custom_path else _BACKGROUND_IMAGE_PATH
-        pixmap = QPixmap(str(path))
-        self._background = pixmap if not pixmap.isNull() else QPixmap(str(_BACKGROUND_IMAGE_PATH))
-
-    def _on_config_panel_alpha_changed(self, alpha: int) -> None:
-        self._config_panel_alpha = alpha
-        save_appearance(config_panel_alpha=alpha)
-        self.update()
-
-    def _on_config_background_changed(self, path: Optional[str]) -> None:
-        self._load_background(path)
-        save_appearance(config_background_path=path)
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        if not self._background.isNull():
-            scaled = self._background.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (scaled.width() - self.width()) // 2
-            y = (scaled.height() - self.height()) // 2
-            painter.drawPixmap(0, 0, scaled, x, y, self.width(), self.height())
-        painter.fillRect(self.rect(), QColor(0, 0, 0, self._config_panel_alpha))
-        painter.end()
-        super().paintEvent(event)
+    def _on_page_changed(self, index: int) -> None:
+        if not 0 <= index < len(self._PAGE_INFO):
+            return
+        self._stack.setCurrentIndex(index)
+        title, subtitle = self._PAGE_INFO[index]
+        self._page_title.setText(title)
+        self._page_subtitle.setText(subtitle)

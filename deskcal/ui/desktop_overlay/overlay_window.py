@@ -1,14 +1,14 @@
-"""桌面层窗口：三栏组合（组件区[Phase 4 实现] + 待办收纳侧栏 + 日历主体），
+"""桌面层窗口：左侧上下分区（滚动组件区 + 课表）与右侧日历主体，
 外加无边框/贴底层/半透明背景，以及解锁=可拖动缩放、锁定=恢复日历交互 的窗口行为。
 
 解锁状态下用一个盖住全窗口的半透明"调整模式"层挡住所有点击，由它统一处理拖动/缩放，
-日历和侧栏本身不需要任何"是否可交互"开关，天然避免了拖动手势和右键建任务的区域冲突。
+日历和内容区本身不需要任何"是否可交互"开关，天然避免了拖动手势和右键建任务的区域冲突。
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
-from PyQt6.QtCore import QRect, QRectF, Qt, QTimer
+from PyQt6.QtCore import QPoint, QRect, QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
@@ -24,8 +24,10 @@ from PyQt6.QtWidgets import (
 
 from deskcal.core.storage import (
     TaskStore,
+    get_main_tour_completed_version,
     load_appearance,
     load_window_geometry,
+    mark_main_tour_completed,
     save_appearance,
     save_window_geometry,
 )
@@ -35,6 +37,7 @@ from deskcal.ui.config_panel.config_window import ConfigWindow
 from deskcal.ui.desktop_overlay.calendar_grid import COLS, ROWS, CalendarGrid
 from deskcal.ui.desktop_overlay.sidebar_todo import SidebarTodo
 from deskcal.ui.desktop_overlay.widgets.registry import WIDGET_DEFINITIONS, WidgetConfigStore
+from deskcal.ui.onboarding.guided_tour import GuidedTourOverlay, TOUR_VERSION
 from deskcal.ui.style_utils import make_scroll_area_transparent
 from deskcal.utils import crypto
 from deskcal.utils.monitor import compute_monitor_signature
@@ -70,17 +73,17 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 """
 
-DEFAULT_WIDGET_AREA_WIDTH = 200
-DEFAULT_SIDEBAR_WIDTH = 180
+DEFAULT_LEFT_AREA_WIDTH = 388
+DEFAULT_LEFT_TOP_RATIO = 0.58
 MARGIN = 8
 GAP = 8
 OUTER_MARGIN = MARGIN * 2
-COLUMN_SPACING = GAP * 2
+COLUMN_SPACING = GAP
 
-# 三个模块（组件区/侧栏/日历）宽度可由用户在调整模式下拖拽分割线改变，这两个是下限，
-# 防止某个模块被拖到几乎看不见。
-MIN_WIDGET_AREA_WIDTH = 120
-MIN_SIDEBAR_WIDTH = 120
+# 左侧整体宽度和上下两区高度均可在调整模式中拖动；下限保证内容仍可操作。
+MIN_LEFT_AREA_WIDTH = 260
+MIN_LEFT_TOP_HEIGHT = 180
+MIN_SCHEDULE_HEIGHT = 260
 
 # 最小尺寸不是拍脑袋定的数字，而是反推"日历格子至少能显示日期数字+一条任务"所需的空间
 MIN_CELL_WIDTH = 60
@@ -90,8 +93,8 @@ CALENDAR_CHROME_HEIGHT = 60  # 年月标题行 + 星期表头行的估算高度
 MIN_CALENDAR_WIDTH = MIN_CELL_WIDTH * COLS
 MIN_CALENDAR_HEIGHT = CALENDAR_CHROME_HEIGHT + MIN_CELL_HEIGHT * ROWS
 
-MIN_WINDOW_WIDTH = MIN_WIDGET_AREA_WIDTH + MIN_SIDEBAR_WIDTH + MIN_CALENDAR_WIDTH + OUTER_MARGIN + COLUMN_SPACING
-MIN_WINDOW_HEIGHT = MIN_CALENDAR_HEIGHT + OUTER_MARGIN
+MIN_WINDOW_WIDTH = MIN_LEFT_AREA_WIDTH + MIN_CALENDAR_WIDTH + OUTER_MARGIN + COLUMN_SPACING
+MIN_WINDOW_HEIGHT = max(MIN_CALENDAR_HEIGHT + OUTER_MARGIN, MIN_LEFT_TOP_HEIGHT + MIN_SCHEDULE_HEIGHT + GAP + OUTER_MARGIN)
 
 RESIZE_MARGIN = 8
 DIVIDER_HIT_MARGIN = 6
@@ -108,15 +111,15 @@ class AdjustModeOverlay(QWidget):
         self._drag_start_geometry = None
         self._resize_edges: set[str] = set()
         self._backdrop: Optional[QPixmap] = None
-        self._dragging_divider: Optional[int] = None
-        self._divider_drag_start_x = 0
-        self._divider_drag_start_widths = (0, 0)
+        self._dragging_divider: Optional[str] = None
+        self._divider_drag_start_mouse = None
+        self._divider_drag_start_value = 0
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
 
         layout = QVBoxLayout(self)
-        label = QLabel("调整模式\n拖动空白处移动窗口 · 拖动边缘缩放 · 拖动竖线调整三栏宽度 · 锁定后生效")
+        label = QLabel("调整模式\n拖动空白处移动窗口 · 拖动边缘缩放 · 拖动分隔线调整区域大小 · 锁定后生效")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: bold; background: transparent;")
         layout.addWidget(label)
@@ -148,16 +151,24 @@ class AdjustModeOverlay(QWidget):
         pen = QPen(DIVIDER_LINE_COLOR)
         pen.setWidth(2)
         painter.setPen(pen)
-        for divider_x in self._target.divider_x_positions():
-            painter.drawLine(divider_x, 0, divider_x, self.height())
+        divider_x = self._target.main_divider_x()
+        painter.drawLine(divider_x, 0, divider_x, self.height())
+        if self._target.has_schedule_panel():
+            divider_y = self._target.left_split_y()
+            painter.drawLine(0, divider_y, divider_x, divider_y)
 
         painter.end()
         super().paintEvent(event)
 
-    def _divider_at(self, pos) -> Optional[int]:
-        for index, divider_x in enumerate(self._target.divider_x_positions(), start=1):
-            if abs(pos.x() - divider_x) <= DIVIDER_HIT_MARGIN:
-                return index
+    def _divider_at(self, pos) -> Optional[str]:
+        if abs(pos.x() - self._target.main_divider_x()) <= DIVIDER_HIT_MARGIN:
+            return "main"
+        if (
+            self._target.has_schedule_panel()
+            and pos.x() <= self._target.main_divider_x()
+            and abs(pos.y() - self._target.left_split_y()) <= DIVIDER_HIT_MARGIN
+        ):
+            return "left_split"
         return None
 
     def _edges_at(self, pos) -> set[str]:
@@ -191,8 +202,10 @@ class AdjustModeOverlay(QWidget):
         divider = self._divider_at(pos)
         if divider is not None:
             self._dragging_divider = divider
-            self._divider_drag_start_x = event.globalPosition().toPoint().x()
-            self._divider_drag_start_widths = self._target.current_column_widths()
+            self._divider_drag_start_mouse = event.globalPosition().toPoint()
+            self._divider_drag_start_value = (
+                self._target.left_area_width() if divider == "main" else self._target.left_top_height()
+            )
             return
 
         self._drag_start_mouse = event.globalPosition().toPoint()
@@ -201,19 +214,20 @@ class AdjustModeOverlay(QWidget):
 
     def mouseMoveEvent(self, event) -> None:
         if self._dragging_divider is not None:
-            delta_x = event.globalPosition().toPoint().x() - self._divider_drag_start_x
-            start_widget_width, start_sidebar_width = self._divider_drag_start_widths
-            if self._dragging_divider == 1:
-                self._target.set_widget_area_width(start_widget_width + delta_x)
+            delta = event.globalPosition().toPoint() - self._divider_drag_start_mouse
+            if self._dragging_divider == "main":
+                self._target.set_left_area_width(self._divider_drag_start_value + delta.x())
             else:
-                self._target.set_sidebar_width(start_sidebar_width + delta_x)
+                self._target.set_left_top_height(self._divider_drag_start_value + delta.y())
             self.update()
             return
 
         if self._drag_start_mouse is None:
             divider = self._divider_at(event.position().toPoint())
-            if divider is not None:
+            if divider == "main":
                 self.setCursor(Qt.CursorShape.SizeHorCursor)
+            elif divider == "left_split":
+                self.setCursor(Qt.CursorShape.SizeVerCursor)
             else:
                 self._update_cursor(self._edges_at(event.position().toPoint()))
             return
@@ -252,6 +266,7 @@ class AdjustModeOverlay(QWidget):
     def mouseReleaseEvent(self, event) -> None:
         if self._dragging_divider is not None:
             self._dragging_divider = None
+            self._divider_drag_start_mouse = None
             return
         self._drag_start_mouse = None
         self._drag_start_geometry = None
@@ -272,8 +287,11 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         self.setStyleSheet(WIDGET_QSS)
-        self._widget_area_width = DEFAULT_WIDGET_AREA_WIDTH
-        self._sidebar_width = DEFAULT_SIDEBAR_WIDTH
+        self._store = store
+        self._left_area_width = DEFAULT_LEFT_AREA_WIDTH
+        self._left_top_ratio = DEFAULT_LEFT_TOP_RATIO
+        self._left_split_manual = False
+        self._schedule_enabled = False
         self._restore_geometry()
 
         self._panel_alpha = load_appearance().get("panel_alpha", PANEL_COLOR.alpha())
@@ -286,6 +304,12 @@ class OverlayWindow(QWidget):
         layout.setContentsMargins(MARGIN, MARGIN, MARGIN, MARGIN)
         layout.setSpacing(GAP)
 
+        self._left_container = QWidget()
+        self._left_container.setFixedWidth(self._left_area_width)
+        left_layout = QVBoxLayout(self._left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(GAP)
+
         self._widget_area_container = QWidget()
         self._widget_area_layout = QVBoxLayout(self._widget_area_container)
         self._widget_area_layout.setContentsMargins(0, 0, 8, 0)
@@ -295,15 +319,25 @@ class OverlayWindow(QWidget):
         self._widget_area_scroll = QScrollArea()
         self._widget_area_scroll.setWidget(self._widget_area_container)
         self._widget_area_scroll.setWidgetResizable(True)
-        self._widget_area_scroll.setFixedWidth(self._widget_area_width)
         self._widget_area_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._widget_area_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         make_scroll_area_transparent(self._widget_area_scroll)
-        layout.addWidget(self._widget_area_scroll)
+        left_layout.addWidget(self._widget_area_scroll)
 
-        self._sidebar = SidebarTodo(store)
-        self._sidebar.setFixedWidth(self._sidebar_width)
-        layout.addWidget(self._sidebar)
+        self._schedule_container = QWidget()
+        self._schedule_layout = QVBoxLayout(self._schedule_container)
+        self._schedule_layout.setContentsMargins(0, 0, 8, 0)
+        self._schedule_layout.setSpacing(0)
+        self._schedule_scroll = QScrollArea()
+        self._schedule_scroll.setWidget(self._schedule_container)
+        self._schedule_scroll.setWidgetResizable(True)
+        self._schedule_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._schedule_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._schedule_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        make_scroll_area_transparent(self._schedule_scroll)
+        left_layout.addWidget(self._schedule_scroll, 1)
+
+        layout.addWidget(self._left_container)
 
         self._calendar = CalendarGrid(store)
         layout.addWidget(self._calendar, 1)
@@ -321,6 +355,12 @@ class OverlayWindow(QWidget):
         self._adjust_overlay = AdjustModeOverlay(self, parent=self)
         self._adjust_overlay.setGeometry(self.rect())
         self._adjust_overlay.hide()
+
+        self._tour_tray_hint_callback: Optional[Callable[[], None]] = None
+        self._guided_tour = GuidedTourOverlay(self._guided_tour_anchor, parent=self)
+        self._guided_tour.setGeometry(self.rect())
+        self._guided_tour.dismissed.connect(self._mark_guided_tour_completed)
+        self._guided_tour.stepChanged.connect(self._on_guided_tour_step_changed)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -360,8 +400,13 @@ class OverlayWindow(QWidget):
     def _apply_saved_or_default_geometry(self) -> None:
         saved = load_window_geometry(self._monitor_signature)
         if saved is not None:
-            self._widget_area_width = max(saved.get("widget_area_width", DEFAULT_WIDGET_AREA_WIDTH), MIN_WIDGET_AREA_WIDTH)
-            self._sidebar_width = max(saved.get("sidebar_width", DEFAULT_SIDEBAR_WIDTH), MIN_SIDEBAR_WIDTH)
+            legacy_left_width = (
+                saved.get("widget_area_width", 200) + saved.get("sidebar_width", 180) + GAP
+            )
+            self._left_area_width = max(saved.get("left_area_width", legacy_left_width), MIN_LEFT_AREA_WIDTH)
+            ratio = saved.get("left_top_ratio", DEFAULT_LEFT_TOP_RATIO)
+            self._left_top_ratio = min(0.9, max(0.1, ratio)) if isinstance(ratio, (int, float)) else DEFAULT_LEFT_TOP_RATIO
+            self._left_split_manual = bool(saved.get("left_split_manual", False))
 
             width = max(saved["width"], MIN_WINDOW_WIDTH)
             height = max(saved["height"], MIN_WINDOW_HEIGHT)
@@ -369,9 +414,9 @@ class OverlayWindow(QWidget):
             on_screen = any(
                 screen.availableGeometry().intersects(candidate) for screen in QGuiApplication.screens()
             )
-            if hasattr(self, "_widget_area_scroll"):
-                self._widget_area_scroll.setFixedWidth(self._widget_area_width)
-                self._sidebar.setFixedWidth(self._sidebar_width)
+            if hasattr(self, "_left_container"):
+                self.set_left_area_width(self._left_area_width)
+                self._apply_left_split()
             if on_screen:
                 self.setGeometry(candidate)
                 return
@@ -380,34 +425,75 @@ class OverlayWindow(QWidget):
     def persist_geometry(self) -> None:
         geo = self.geometry()
         save_window_geometry(
-            self._monitor_signature, geo.x(), geo.y(), geo.width(), geo.height(), self._widget_area_width, self._sidebar_width
+            self._monitor_signature,
+            geo.x(),
+            geo.y(),
+            geo.width(),
+            geo.height(),
+            self._left_area_width,
+            round(self._left_top_ratio, 4),
+            self._left_split_manual,
         )
 
     def closeEvent(self, event) -> None:
         self.persist_geometry()
         super().closeEvent(event)
 
-    def current_column_widths(self) -> tuple[int, int]:
-        return self._widget_area_width, self._sidebar_width
+    def left_area_width(self) -> int:
+        return self._left_area_width
 
-    def divider_x_positions(self) -> tuple[int, int]:
-        divider1 = MARGIN + self._widget_area_width + GAP // 2
-        divider2 = MARGIN + self._widget_area_width + GAP + self._sidebar_width + GAP // 2
-        return divider1, divider2
+    def left_top_height(self) -> int:
+        return self._widget_area_scroll.height()
 
-    def set_widget_area_width(self, width: int) -> None:
-        max_width = self.width() - MARGIN * 2 - GAP * 2 - self._sidebar_width - MIN_CALENDAR_WIDTH
-        self._widget_area_width = max(MIN_WIDGET_AREA_WIDTH, min(width, max_width))
-        self._widget_area_scroll.setFixedWidth(self._widget_area_width)
+    def main_divider_x(self) -> int:
+        return MARGIN + self._left_area_width + GAP // 2
 
-    def set_sidebar_width(self, width: int) -> None:
-        max_width = self.width() - MARGIN * 2 - GAP * 2 - self._widget_area_width - MIN_CALENDAR_WIDTH
-        self._sidebar_width = max(MIN_SIDEBAR_WIDTH, min(width, max_width))
-        self._sidebar.setFixedWidth(self._sidebar_width)
+    def left_split_y(self) -> int:
+        return MARGIN + self.left_top_height() + GAP // 2
+
+    def has_schedule_panel(self) -> bool:
+        return self._schedule_enabled
+
+    def set_left_area_width(self, width: int) -> None:
+        max_width = self.width() - OUTER_MARGIN - GAP - MIN_CALENDAR_WIDTH
+        self._left_area_width = max(MIN_LEFT_AREA_WIDTH, min(width, max_width))
+        self._left_container.setFixedWidth(self._left_area_width)
+
+    def set_left_top_height(self, height: int) -> None:
+        if not self._schedule_enabled:
+            return
+        available = max(1, self.height() - OUTER_MARGIN - GAP)
+        top_height = max(MIN_LEFT_TOP_HEIGHT, min(height, available - MIN_SCHEDULE_HEIGHT))
+        self._left_top_ratio = top_height / available
+        self._left_split_manual = True
+        self._apply_left_split()
+
+    def _apply_left_split(self) -> None:
+        if not hasattr(self, "_widget_area_scroll"):
+            return
+        self._schedule_scroll.setVisible(self._schedule_enabled)
+        if not self._schedule_enabled:
+            self._schedule_container.setMinimumHeight(0)
+            self._widget_area_scroll.setMinimumHeight(0)
+            self._widget_area_scroll.setMaximumHeight(16777215)
+            return
+        available = max(1, self.height() - OUTER_MARGIN - GAP)
+        self._schedule_container.setMinimumHeight(0)
+        self._schedule_layout.activate()
+        desired_schedule_height = max(MIN_SCHEDULE_HEIGHT, self._schedule_container.sizeHint().height())
+        self._schedule_container.setMinimumHeight(desired_schedule_height)
+        if self._left_split_manual:
+            top_height = round(available * self._left_top_ratio)
+        else:
+            top_height = available - desired_schedule_height
+        top_height = max(MIN_LEFT_TOP_HEIGHT, min(top_height, available - MIN_SCHEDULE_HEIGHT))
+        self._left_top_ratio = top_height / available
+        self._widget_area_scroll.setFixedHeight(top_height)
 
     def _on_sync_data_changed(self) -> None:
         self._calendar.render()
-        self._sidebar.render()
+        if self._sidebar is not None:
+            self._sidebar.render()
 
     def render_widgets(self) -> None:
         while self._widget_area_layout.count() > 1:
@@ -416,10 +502,29 @@ class OverlayWindow(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
+        while self._schedule_layout.count():
+            item = self._schedule_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self._sidebar = None
+        self._schedule_enabled = False
         for instance in self._widget_store.enabled_items():
+            if instance.type_id == "floating_todo":
+                self._sidebar = SidebarTodo(self._store)
+                self._widget_area_layout.insertWidget(self._widget_area_layout.count() - 1, self._sidebar)
+                continue
             definition = WIDGET_DEFINITIONS[instance.type_id]
+            if definition.widget_class is None:
+                continue
             widget = definition.widget_class(instance.config)
+            if instance.type_id == "schedule":
+                self._schedule_layout.addWidget(widget)
+                self._schedule_enabled = True
+                continue
             self._widget_area_layout.insertWidget(self._widget_area_layout.count() - 1, widget)
+        self._apply_left_split()
 
     def open_config_panel(self) -> None:
         if self._config_window is None:
@@ -437,13 +542,13 @@ class OverlayWindow(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if not hasattr(self, "_widget_area_scroll"):
+        if not hasattr(self, "_left_container"):
             return  # 构造阶段 _restore_geometry() 里的 resize() 也会触发这个事件，那时子控件还没建好
         self._adjust_overlay.setGeometry(self.rect())
-        # 整窗变窄时（拖边缘缩放），重新夹一下当前列宽，避免组件区/侧栏的固定宽度
-        # 加起来超过新窗口能给的空间。
-        self.set_widget_area_width(self._widget_area_width)
-        self.set_sidebar_width(self._sidebar_width)
+        if hasattr(self, "_guided_tour"):
+            self._guided_tour.setGeometry(self.rect())
+        self.set_left_area_width(self._left_area_width)
+        self._apply_left_split()
 
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
@@ -458,3 +563,39 @@ class OverlayWindow(QWidget):
 
     def is_locked(self) -> bool:
         return self._locked
+
+    def set_tour_tray_hint_callback(self, callback: Callable[[], None]) -> None:
+        self._tour_tray_hint_callback = callback
+
+    def maybe_start_guided_tour(self) -> None:
+        if get_main_tour_completed_version() < TOUR_VERSION:
+            self.start_guided_tour()
+
+    def start_guided_tour(self) -> None:
+        self._guided_tour.setGeometry(self.rect())
+        self._guided_tour.start()
+
+    def _mark_guided_tour_completed(self) -> None:
+        mark_main_tour_completed(TOUR_VERSION)
+
+    def _on_guided_tour_step_changed(self, step_key: str) -> None:
+        if step_key == "tray" and self._tour_tray_hint_callback is not None:
+            self._tour_tray_hint_callback()
+
+    def _guided_tour_anchor(self, key: str) -> Optional[QRect]:
+        if key == "calendar_day":
+            widget = self._calendar.tour_target_cell()
+        elif key == "widgets":
+            widget = self._widget_area_scroll
+        elif key == "schedule":
+            widget = self._schedule_scroll if self._schedule_enabled and self._schedule_scroll.isVisible() else None
+        else:
+            widget = None
+        if widget is None or not widget.isVisible():
+            return None
+
+        top_left = widget.mapTo(self, QPoint(0, 0))
+        rect = QRect(top_left, widget.size()).intersected(self.rect())
+        if key in {"widgets", "schedule"} and rect.height() > 220:
+            rect.setHeight(220)
+        return rect if rect.isValid() else None
