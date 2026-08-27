@@ -1,105 +1,222 @@
 # DeskToDo
 
-贴在桌面最底层的悬浮日历 + 待办事项小工具，专为 Windows 打造。日历常驻桌面背景之上、其他窗口之下，点开任务一目了然，配合天气、倒计时、进度条等小组件。
+面向 Windows 的桌面日历、待办与课表工具。
 
-A desktop-anchored floating calendar & to-do widget for Windows — sits above your wallpaper, below every other window.
+DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期任务、无日期待办、课程表和常用信息组件集中在一个可调整的桌面面板中。程序通过系统托盘运行，默认不抢占普通窗口；布局、外观和数据均保存在当前 Windows 用户目录下。
 
-[**下载最新安装包 → Releases**](https://github.com/ShawnXu01/DeskToDo/releases/latest)
+当前版本：**v1.3**
 
-## 功能特性
+[下载最新版](https://github.com/ShawnXu01/DeskToDo/releases/latest) · [完整用户指南](USER_GUIDE.md) · [已知问题](docs/known-issues.md)
 
-- **桌面悬浮日历**：贴在桌面壁纸上方、普通窗口下方，背板黑色透明度可调，不挡壁纸也不抢焦点
-- **任务管理**：单次、范围每天、范围内每周几、指定多日四种周期类型；今日任务高亮、农历/节假日信息显示在日期旁
-- **节假日**：内置当年法定节假日数据（可自行导入更新年份）；同时收录国际通用节日（情人节、万圣节、圣诞节等）和中国传统农历节日（元宵、七夕、中秋等），母亲节/父亲节/感恩节等公式类节日自动计算
-- **小组件**：时钟、天气（4 天预报 + 折线图，城市名自动识别）、倒计时、进度条，均可在设置面板里启用/排序/配置
-- **多显示器位置记忆**：按当前显示器组合自动记住悬浮窗位置、大小，换接口/换地方自动切换
-- **多设备同步（可选）**：通过 GitHub Gist 同步任务数据，支持多台电脑共享同一份待办
-- **开机自启动**：可在设置面板里一键开关
-- **外观可调**：悬浮窗 / 设置界面背板透明度独立可调，设置界面背景图可自行替换
+> DeskToDo 当前专为 Windows 开发和测试。项目使用 Windows DPAPI（Data Protection API，数据保护 API）保存 GitHub Token，并通过 Windows 注册表管理开机自启动。
+
+## 功能概览
+
+### 日历与待办
+
+- 月视图日历，一周从星期一开始，支持切换月份和点击相邻月份日期跳转。
+- 日期任务支持四种重复规则：单次、日期范围内每天、日期范围内指定星期、指定多个日期。
+- 重复任务按日期分别记录完成状态，不会因完成某一次而影响其他日期。
+- 独立的无日期待办，适合记录暂时没有截止日期的事项。
+- 任务支持优先级、编辑、完成/恢复和删除。
+
+### 课程表
+
+- 按学期管理课程，支持新增、编辑、复制、归档和删除学期。
+- 课程可记录课程编号、名称、星期、时间、地点、教师、颜色和备注。
+- 支持无固定时间课程，以及工作日/全周、12/24 小时制切换。
+- 紧凑课表嵌入桌面面板，也可打开完整周课表查看详情。
+- 可配置课前 Windows 通知，提前时间范围为 1–180 分钟。
+- 支持通过“课表截图 + 外部图像识别 AI”生成 CSV，预览后追加导入课程。
+
+> “AI 图片导入”不会在 DeskToDo 内调用 AI 服务。程序只负责复制结构化提示词，并读取外部 AI 生成的 UTF-8 CSV 文件。
+
+### 桌面组件
+
+| 组件 | 功能 |
+| --- | --- |
+| 时钟 | 显示当前时间与日期 |
+| 天气 | 和风天气实时天气、今天及未来 3 天预报、最高/最低温趋势 |
+| 无日期待办 | 在桌面直接管理未排期事项 |
+| 课表 | 显示当前学期的紧凑周课表 |
+| 倒计时 | 同时展示多个目标日期的剩余时间 |
+| 进度条 | 按起止日期展示多个事项的时间进度 |
+
+所有组件均可在设置面板中启用或关闭；普通组件还可以调整顺序。
+
+### 桌面体验与数据
+
+- 悬浮面板背景透明度、设置面板透明度和设置背景图均可调整。
+- 解锁后可移动、缩放窗口，并调整左侧宽度及课表区域高度。
+- 按当前显示器组合分别记忆窗口位置和布局，适合笔记本与外接显示器切换。
+- 内置 2026 年节假日数据，并显示常见公历节日、农历节日和按规则计算的节日；支持导入自定义年度 JSON。
+- 可选 GitHub Gist 同步，在多台电脑间合并日期任务和无日期待办。
+- 支持开机自启动、首次启动向导、主界面引导和托盘临时隐藏 15 秒。
 
 ## 安装
 
-### 普通用户：直接下载安装包
+### 使用安装包
 
-1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-x.x.exe`，双击运行
-2. 选择安装目录，勾选是否需要桌面快捷方式、开机自启动
-3. 安装完成后自动启动，首次启动会弹出引导向导
+1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.3.exe`。
+2. 运行安装程序，选择安装目录，并按需创建桌面快捷方式或启用开机自启动。
+3. 安装完成后启动 DeskToDo，按首次启动向导配置天气和可选的 Gist 同步。
 
-已经装过旧版本？直接双击新的安装包即可原地升级，会自动关闭正在运行的旧程序并覆盖，任务数据、节假日设置、Token 等都保存在 `%APPDATA%` 下，不受影响。
+安装程序以当前用户权限安装，无需管理员权限。覆盖安装新版本时，程序文件会被替换，但 `%APPDATA%\DeskCal\` 中的用户数据不会被安装程序覆盖。
 
-### 开发者：从源码运行
+> 重要数据建议在升级前手动备份。详见[本地数据与备份](#本地数据与备份)。
 
-```bash
-# 1. 创建虚拟环境并安装依赖
+### 首次使用
+
+DeskToDo 启动后会显示桌面面板，并在 Windows 通知区域保留托盘图标。右键托盘图标可以：
+
+- 打开设置面板；
+- 重新查看使用引导；
+- 解锁或锁定桌面位置；
+- 临时隐藏面板 15 秒；
+- 完全退出程序。
+
+调整布局时，先取消“锁定桌面位置”，拖动窗口、边缘或分隔线；完成后重新锁定，当前显示器组合下的布局会被保存。
+
+更详细的任务、课表、天气、同步和备份操作见 [DeskToDo 用户指南](USER_GUIDE.md)。
+
+## 可选配置
+
+| 配置项 | 入口 | 说明 |
+| --- | --- | --- |
+| 天气位置 | 设置 → 桌面组件 → 天气 → 设置 | 填写 `经度,纬度`（英文逗号）或和风天气 LocationID；城市名会自动识别 |
+| GitHub Gist Token | 设置 → 数据同步 | 用于同步任务；保存后需要完全退出并重启 DeskToDo |
+| Gist ID | 设置 → 数据同步 | 高级选项；自动查找失败或需要指定某个 Gist 时再填写 |
+| 课前提醒 | 设置 → 桌面组件 → 课表 → 设置 | 启用 Windows 通知并设置提前分钟数 |
+| 节假日 JSON | 设置 → 节假日信息 | 导入会替换当前导入的数据，不是追加合并 |
+| 开机自启动 | 设置 → UI 调整 | 切换后立即更新当前用户的启动项 |
+| 设置背景图 | 设置 → UI 调整 | 选择本地图片作为设置面板背景 |
+
+## GitHub Gist 同步
+
+Gist 同步是可选功能。配置有效 Token 后，DeskToDo 默认每 5 分钟在后台同步一次，也可以在设置面板中手动触发。首次同步会查找当前账号下已有的 DeskToDo Gist；未找到时自动创建私密 Gist。
+
+合并以每条任务的 `updated_at` 时间为准，较新的记录覆盖较旧记录；删除状态也会参与同步。
+
+### 会同步
+
+- 日期任务；
+- 无日期待办。
+
+### 不会同步
+
+- 学期与课程表；
+- 天气、倒计时、进度条和组件排列配置；
+- 窗口位置、区域大小与界面外观；
+- 自定义节假日数据；
+- 其他本地设置。
+
+Token 使用 Windows DPAPI 加密，且与当前 Windows 用户绑定。换电脑或换 Windows 用户后，需要重新输入 Token。Token 相当于 Gist 的访问凭证，请勿分享、截图或提交到仓库。
+
+## 本地数据与备份
+
+所有用户数据默认保存在：
+
+```text
+%APPDATA%\DeskCal\
+```
+
+常见文件如下：
+
+| 文件 | 内容 |
+| --- | --- |
+| `tasks.json` | 日期任务、无日期待办及同步删除记录 |
+| `schedule.json` | 学期和课程 |
+| `widgets.json` | 组件状态、顺序及各组件配置 |
+| `window_state.json` | 不同显示器组合下的窗口位置和布局 |
+| `appearance.json` | 透明度、设置背景图、开机自启动和引导状态 |
+| `holidays.json` | 导入或内置的年度节假日数据 |
+| `credentials.json` | 首次启动状态、加密后的 Gist Token 和 Gist ID |
+| `schedule_reminder_state.json` | 当天已经发送过的课程提醒记录 |
+
+完整备份时，请先从托盘退出 DeskToDo，再复制整个 `%APPDATA%\DeskCal\` 文件夹。由于 DPAPI 与 Windows 用户绑定，复制到另一台电脑后仍应重新填写 GitHub Token。
+
+## 从源码运行
+
+### 环境要求
+
+- Windows；
+- Python 3；
+- 项目依赖见 [`requirements.txt`](requirements.txt)。
+
+PyQt6 固定为 `6.6.1`。项目曾在部分 Windows 环境中遇到新版 Qt 的 `Qt6Core.dll` 加载失败（`WinError 127`），原因与处理记录见 [`docs/known-issues.md`](docs/known-issues.md)。
+
+### 安装与启动
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-
-# 2. 启动
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python -m deskcal.main
 ```
 
-> ⚠️ `requirements.txt` 里 PyQt6 锁定在 6.6.1：更新版本在部分 Windows 环境会导致 `Qt6Core.dll` 加载失败（`WinError 127`），详见 `docs/known-issues.md`。
+仓库不会提交 `secrets/`。因此，从源码运行时，除天气外的功能可以正常使用；如需天气功能，需要准备自己的和风天气项目凭证：
 
-## 配置说明
+1. 运行 `python scripts/gen_qweather_keypair.py` 生成 Ed25519 密钥对；
+2. 将公钥上传到和风天气控制台；
+3. 在 `deskcal/services/weather_service.py` 中填写自己的 `PROJECT_ID` 和 `KID`；
+4. 将私钥保留在 `secrets/qweather/ed25519-private.pem`，不要提交到 Git。
 
-首次启动会弹出引导向导，可以填，也可以先跳过、之后在**右键托盘图标 → 设置**里随时补填：
+## 测试
 
-| 配置项 | 在哪里填 | 怎么获取 |
-| --- | --- | --- |
-| GitHub Gist Token | 设置面板 → 数据同步 | GitHub → Settings → Developer settings → Personal access tokens，勾选 `gist` 权限。**改动后需要重启程序才会生效** |
-| 天气城市定位 | 设置面板 → 桌面组件 → 天气 → 设置 | 填 `经度,纬度`（如 `120.68,30.51`），或和风天气 LocationID（在 qweather.com 搜索城市后，网址末尾的数字）。城市名称会自动识别显示，不需要手填 |
-| 节假日数据 | 设置面板 → 节假日信息 | 当年法定节假日数据已内置；以后年份需要自己去国务院发布的节假日安排里整理成 JSON 后导入，页面里有格式说明 |
-| 开机自启动 | 设置面板 → UI 调整 | 勾选/取消即可，立即生效 |
-| 设置界面背景图 | 设置面板 → UI 调整 | "上传背景图..." 按钮，选一张图片即可替换 |
-
-数据存放位置：`%APPDATA%\DeskCal\`（任务数据、窗口位置记忆、Token 等，每台电脑独立，互不影响）。
-
-## 开发
-
-代码结构（`deskcal/` 下）：
-
-- `core/`：数据模型、本地存储、Gist 同步逻辑
-- `services/`：节假日、天气、开机自启动等后台服务
-- `ui/desktop_overlay/`：悬浮日历主窗口、日历格子、小组件
-- `ui/config_panel/`：设置面板各个 Tab
-- `ui/dialogs/`：新建任务、日期选择等弹窗
-- `ui/onboarding/`：首次启动引导向导
-- `tray/`：系统托盘图标
-- `utils/`：图标、显示器签名、凭证加密等工具函数
-
-```bash
-# 跑测试
-python -m pytest tests -v
+```powershell
+python -m pytest tests -q
 ```
 
-### 打包成 exe
+当前测试覆盖任务模型与存储、同步合并、凭证加密、节假日、组件配置、课表模型与导入、课程提醒、主界面引导等核心逻辑。
 
-项目用 [PyInstaller](https://pyinstaller.org/) 打包、[Inno Setup](https://jrsoftware.org/isinfo.php) 做安装包，脚本都在仓库根目录：
+## 打包发布
 
-```bash
-# 1. 装打包工具（只在打包机器上需要，不算运行依赖）
-pip install pyinstaller
+项目使用 [PyInstaller](https://pyinstaller.org/) 生成单目录应用，再使用 [Inno Setup](https://jrsoftware.org/isinfo.php) 生成 Windows 安装包。
 
-# 2. 用 PyInstaller 打成单目录应用，产出 dist/DeskToDo/
+```powershell
+python -m pip install pyinstaller
 python -m PyInstaller desktodo.spec --noconfirm
-
-# 3. 用 Inno Setup 编译成一个安装包 exe，产出 installer_output/DeskToDo-Setup-x.x.exe
-"C:\Users\<你>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer.iss
 ```
 
-几点说明：
+构建产物：
 
-- `desktodo.spec` 里把 `deskcal/assets/`（图标、字体、节假日默认数据）和 `secrets/qweather/`（和风天气私钥）一起打进了包。私钥被打进 exe 意味着任何拿到这个 exe 的人理论上都能反编译出私钥、冒用你的和风天气项目额度——这个项目目前只打算给身边几个人用，所以接受这个风险；**如果以后要公开分发给不认识的人，私钥不能再这样直接打包，需要改成服务端代理转发天气请求**
-- `installer.iss` 用的是非管理员权限安装（装到当前用户目录下），不需要 UAC 弹窗；安装/升级时会自动处理正在运行的旧程序
-- 打包产物 `build/`、`dist/`、`installer_output/` 不需要提交到 git，安装包通过 GitHub Release 分发
-- 改完代码记得先跑一遍测试再打包：`pytest tests`
+- `dist/DeskToDo/`：PyInstaller 单目录应用；
+- `installer_output/DeskToDo-Setup-1.3.exe`：Inno Setup 安装包。
 
-## 路线图
+> `desktodo.spec` 会把 `secrets/qweather/` 一并打包。私钥进入客户端后，理论上可以被提取并滥用天气服务额度。当前项目接受这一分发模型；若面向不受信任的公众大规模发布，应改为服务端代理，不能继续把私钥放入客户端。
 
-- V1：本地日历 + Gist 多 PC 同步（已完成）
-- V2：飞书跨端协同（详见 `docs/v2-mobile-sync-plan.md`）
+## 项目结构
+
+```text
+DeskToDo/
+├─ deskcal/
+│  ├─ core/                 # 任务、课表、存储、导入与同步合并逻辑
+│  ├─ services/             # 天气、节假日、同步、课表提醒与自启动
+│  ├─ tray/                 # Windows 系统托盘
+│  ├─ ui/
+│  │  ├─ config_panel/      # 设置面板
+│  │  ├─ desktop_overlay/   # 桌面悬浮面板、日历、待办与组件
+│  │  ├─ dialogs/           # 任务与日期弹窗
+│  │  ├─ onboarding/        # 首次启动向导与主界面引导
+│  │  └─ schedule/          # 课表组件、完整课表、设置与 CSV 导入
+│  ├─ utils/                # 图标、显示器识别与 Windows DPAPI
+│  └─ main.py               # 程序入口
+├─ tests/                   # 自动化测试
+├─ test_data/               # 课表导入测试数据
+├─ docs/                    # 设计记录、已知问题与后续规划
+├─ scripts/                 # 辅助脚本
+├─ desktodo.spec            # PyInstaller 配置
+└─ installer.iss            # Inno Setup 配置
+```
+
+## 当前边界与路线图
+
+- v1.3 仅面向 Windows 桌面端。
+- Gist 当前只同步任务，不同步课表或界面配置。
+- 默认只内置 2026 年需要按年份维护的节假日数据；其他年份可导入 JSON。
+- V2 的跨端协同仍处于方案规划阶段，尚未实现，详见 [`docs/v2-mobile-sync-plan.md`](docs/v2-mobile-sync-plan.md)。
 
 ## 许可证
 
-[MIT](LICENSE)
+本项目采用 [MIT License](LICENSE)。
