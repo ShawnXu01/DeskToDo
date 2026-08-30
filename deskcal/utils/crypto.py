@@ -104,5 +104,11 @@ def save_gist_id(gist_id: str) -> None:
     _save_payload(payload)
 
 
+def clear_gist_id() -> None:
+    payload = _load_payload()
+    payload.pop("github_gist_id", None)
+    _save_payload(payload)
+
+
 def load_gist_id() -> Optional[str]:
     return _load_payload().get("github_gist_id")

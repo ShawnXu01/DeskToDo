@@ -42,6 +42,11 @@ class TrayIcon(QSystemTrayIcon):
 
         self.setContextMenu(menu)
         self.setToolTip("DeskToDo")
+        self.activated.connect(self._on_activated)
+
+    def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._window.open_config_panel()
 
     def _hide_temporarily(self) -> None:
         self._window.hide()
@@ -50,7 +55,7 @@ class TrayIcon(QSystemTrayIcon):
     def _show_tour_tray_hint(self) -> None:
         self.showMessage(
             "DeskToDo 在这里",
-            "右键托盘图标可以打开设置、解锁布局、临时隐藏或退出。",
+            "左键托盘图标可以打开设置；右键可以解锁布局、临时隐藏或退出。",
             QSystemTrayIcon.MessageIcon.Information,
             5000,
         )

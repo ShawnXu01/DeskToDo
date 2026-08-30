@@ -750,6 +750,9 @@ class SyncTab(QWidget):
         copy_gist_id_btn = QPushButton("复制")
         copy_gist_id_btn.clicked.connect(self._copy_gist_id)
         gist_id_row.addWidget(copy_gist_id_btn)
+        clear_gist_id_btn = QPushButton("清除")
+        clear_gist_id_btn.clicked.connect(self._clear_gist_id)
+        gist_id_row.addWidget(clear_gist_id_btn)
         layout.addLayout(gist_id_row)
 
         save_gist_id_btn = QPushButton("保存 Gist ID")
@@ -778,6 +781,10 @@ class SyncTab(QWidget):
         if gist_id:
             crypto.save_gist_id(gist_id)
 
+    def _clear_gist_id(self) -> None:
+        crypto.clear_gist_id()
+        self._gist_id_edit.clear()
+
     def _copy_gist_id(self) -> None:
         gist_id = self._gist_id_edit.text().strip() or crypto.load_gist_id() or ""
         QApplication.clipboard().setText(gist_id)
@@ -788,7 +795,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.3")
+        label = QLabel("DeskToDo\n版本 1.4")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
