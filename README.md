@@ -4,11 +4,13 @@
 
 DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期任务、无日期待办、课程表和常用信息组件集中在一个可调整的桌面面板中。程序通过系统托盘运行，默认不抢占普通窗口；布局、外观和数据均保存在当前 Windows 用户目录下。
 
-当前版本：**v1.3**
+当前版本：**v1.5**
 
 [下载最新版](https://github.com/ShawnXu01/DeskToDo/releases/latest) · [完整用户指南](USER_GUIDE.md) · [已知问题](docs/known-issues.md)
 
 > DeskToDo 当前专为 Windows 开发和测试。项目使用 Windows DPAPI（Data Protection API，数据保护 API）保存 GitHub Token，并通过 Windows 注册表管理开机自启动。
+
+macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功能同步到相同版本。macOS 原生桌面层级和安装包仍需在 Mac 实机上验证；在验证完成前不提供正式 macOS 下载包。发布流程见 [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)。
 
 ## 功能概览
 
@@ -23,9 +25,9 @@ DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期�
 ### 课程表
 
 - 按学期管理课程，支持新增、编辑、复制、归档和删除学期。
-- 课程可记录课程编号、名称、星期、时间、地点、教师、颜色和备注。
+- 课程可记录课程编号、名称、星期、时间、地点、教师、颜色、备注及可选的 Syllabus/Course Web。
 - 支持无固定时间课程，以及工作日/全周、12/24 小时制切换。
-- 紧凑课表嵌入桌面面板，也可打开完整周课表查看详情。
+- 紧凑课表嵌入桌面面板；点击空白区域打开完整周课表，点击课程可直接打开其课程资料。
 - 可配置课前 Windows 通知，提前时间范围为 1–180 分钟。
 - 支持通过“课表截图 + 外部图像识别 AI”生成 CSV，预览后追加导入课程。
 
@@ -57,7 +59,7 @@ DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期�
 
 ### 使用安装包
 
-1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.3.exe`。
+1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.5.exe`。
 2. 运行安装程序，选择安装目录，并按需创建桌面快捷方式或启用开机自启动。
 3. 安装完成后启动 DeskToDo，按首次启动向导配置天气和可选的 Gist 同步。
 
@@ -182,7 +184,7 @@ python -m PyInstaller desktodo.spec --noconfirm
 构建产物：
 
 - `dist/DeskToDo/`：PyInstaller 单目录应用；
-- `installer_output/DeskToDo-Setup-1.3.exe`：Inno Setup 安装包。
+- `installer_output/DeskToDo-Setup-1.5.exe`：Inno Setup 安装包。
 
 > `desktodo.spec` 会把 `secrets/qweather/` 一并打包。私钥进入客户端后，理论上可以被提取并滥用天气服务额度。当前项目接受这一分发模型；若面向不受信任的公众大规模发布，应改为服务端代理，不能继续把私钥放入客户端。
 
@@ -212,7 +214,7 @@ DeskToDo/
 
 ## 当前边界与路线图
 
-- v1.3 仅面向 Windows 桌面端。
+- v1.5 仅面向 Windows 桌面端。
 - Gist 当前只同步任务，不同步课表或界面配置。
 - 默认只内置 2026 年需要按年份维护的节假日数据；其他年份可导入 JSON。
 - V2 的跨端协同仍处于方案规划阶段，尚未实现，详见 [`docs/v2-mobile-sync-plan.md`](docs/v2-mobile-sync-plan.md)。

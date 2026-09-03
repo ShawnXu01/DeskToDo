@@ -2,7 +2,7 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "1.3"
+#define MyAppVersion "1.5"
 #define MyAppExeName "DeskToDo.exe"
 
 [Setup]
@@ -38,7 +38,7 @@ Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DeskCal"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DeskCal"; ValueData: """{app}\{#MyAppExeName}"" --background"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "安装完成后立即启动 DeskToDo"; Flags: nowait postinstall skipifsilent

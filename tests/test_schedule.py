@@ -20,11 +20,19 @@ def _course(code="ECE340", weekdays=None, start=time(11, 0), end=time(11, 50)):
 
 
 def test_course_validation_and_round_trip():
-    course = _course()
+    course = CourseEntry.create(
+        code="ECE340",
+        weekdays=[1, 3, 5],
+        start_time=time(11, 0),
+        end_time=time(11, 50),
+        color="#F2E6A7",
+        course_resource="https://example.edu/ece340",
+    )
     restored = CourseEntry.from_dict(course.to_dict())
     assert restored.code == "ECE340"
     assert restored.weekdays == [1, 3, 5]
     assert restored.start_time == time(11, 0)
+    assert restored.course_resource == "https://example.edu/ece340"
 
     with pytest.raises(ValueError):
         CourseEntry.create(
@@ -80,10 +88,21 @@ def test_schedule_store_round_trip(tmp_path):
     assert restored.get_active_term().courses[0].code == "ECE340"
 
 
+def test_course_resource_is_optional_for_existing_schedule_data():
+    raw = _course().to_dict()
+    raw.pop("course_resource")
+
+    restored = CourseEntry.from_dict(raw)
+
+    assert restored.course_resource == ""
+
+
 def test_default_term_selection_and_duplicate(tmp_path):
     store = ScheduleStore(tmp_path / "schedule.json")
     fall = Term.create("Fall - 2026", date(2026, 8, 24), date(2026, 12, 18))
-    fall.add_course(_course())
+    source_course = _course()
+    source_course.course_resource = r"C:\Courses\ECE340\syllabus.pdf"
+    fall.add_course(source_course)
     spring = Term.create("Spring - 2027", date(2027, 1, 18), date(2027, 5, 14))
     store.add_term(fall)
     store.add_term(spring)
@@ -93,6 +112,7 @@ def test_default_term_selection_and_duplicate(tmp_path):
     duplicate = store.duplicate_term(fall.id, "Fall - 2027")
     assert duplicate.id != fall.id
     assert duplicate.courses[0].id != fall.courses[0].id
+    assert duplicate.courses[0].course_resource == source_course.course_resource
 
 
 def test_course_code_split_and_visible_range():

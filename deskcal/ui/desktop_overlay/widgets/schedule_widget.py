@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtWidgets import QDialog, QMenu, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QDialog, QMenu, QMessageBox, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from deskcal.core.schedule_storage import ScheduleStore
+from deskcal.ui.schedule.course_resource import open_course_resource
 from deskcal.ui.schedule.schedule_grid import ScheduleGrid
 from deskcal.ui.schedule.schedule_settings import ScheduleSettingsDialog
 from deskcal.ui.schedule.schedule_window import ScheduleWindow
@@ -111,6 +112,13 @@ class ScheduleWidget(QWidget):
                 return
 
     def _open_schedule_for_course(self, course_id: str) -> None:
+        term = self._active_term()
+        course = term.get_course(course_id) if term else None
+        if course and course.course_resource:
+            opened, error = open_course_resource(course.course_resource)
+            if opened:
+                return
+            QMessageBox.warning(self, "无法打开课程资料", error)
         self._open_schedule(course_id)
 
     def _open_schedule(self, course_id: Optional[str] = None) -> None:
@@ -119,7 +127,7 @@ class ScheduleWidget(QWidget):
             self._window.dataChanged.connect(self._reload_data)
             self._window.configChanged.connect(self._on_config_changed)
             self._window.destroyed.connect(lambda: setattr(self, "_window", None))
-        elif course_id:
+        else:
             self._window._select_course(course_id)
         self._window.show()
         self._window.raise_()

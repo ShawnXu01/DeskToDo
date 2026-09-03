@@ -22,9 +22,11 @@ class CourseEntry:
     notes: str
     created_at: datetime
     updated_at: datetime
+    course_resource: str = ""
 
     def __post_init__(self) -> None:
         self.code = self.code.strip()
+        self.course_resource = self.course_resource.strip()
         if not self.code:
             raise ValueError("课程代码不能为空")
         if any(day < 1 or day > 7 for day in self.weekdays):
@@ -53,6 +55,7 @@ class CourseEntry:
         instructor: str = "",
         location: str = "",
         notes: str = "",
+        course_resource: str = "",
     ) -> "CourseEntry":
         now = datetime.now()
         return cls(
@@ -66,6 +69,7 @@ class CourseEntry:
             end_time=end_time,
             color=color,
             notes=notes.strip(),
+            course_resource=course_resource.strip(),
             created_at=now,
             updated_at=now,
         )
@@ -82,6 +86,7 @@ class CourseEntry:
             "end_time": self.end_time.strftime("%H:%M") if self.end_time else None,
             "color": self.color,
             "notes": self.notes,
+            "course_resource": self.course_resource,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -99,6 +104,7 @@ class CourseEntry:
             end_time=time.fromisoformat(data["end_time"]) if data.get("end_time") else None,
             color=data["color"],
             notes=data.get("notes", ""),
+            course_resource=data.get("course_resource", ""),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
         )
