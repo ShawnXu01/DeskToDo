@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from deskcal.core.schedule_models import CourseEntry, Term
 from deskcal.core.schedule_storage import ScheduleStore
+from deskcal.ui.schedule.course_resource import open_course_resource
 from deskcal.ui.schedule.schedule_grid import ScheduleGrid
 from deskcal.ui.schedule.schedule_settings import CourseEditDialog, SCHEDULE_QSS, ScheduleSettingsDialog, format_weekdays
 from deskcal.ui.style_utils import make_scroll_area_transparent
@@ -118,6 +120,9 @@ class ScheduleWindow(QWidget):
         self._duplicate_btn = QPushButton("复制课程")
         self._duplicate_btn.clicked.connect(self._duplicate_selected_course)
         detail_layout.addWidget(self._duplicate_btn)
+        self._resource_btn = QPushButton("打开课程资料")
+        self._resource_btn.clicked.connect(self._open_selected_course_resource)
+        detail_layout.addWidget(self._resource_btn)
         splitter.addWidget(details)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
@@ -183,7 +188,7 @@ class ScheduleWindow(QWidget):
         self._grid.set_show_weekends(show_weekends)
         self.configChanged.emit(dict(self._config))
 
-    def _select_course(self, course_id: str) -> None:
+    def _select_course(self, course_id: Optional[str]) -> None:
         self._selected_course_id = course_id
         self._grid.set_selected_course(course_id)
         self._update_details()
@@ -193,6 +198,7 @@ class ScheduleWindow(QWidget):
         enabled = course is not None
         self._edit_btn.setEnabled(enabled)
         self._duplicate_btn.setEnabled(enabled)
+        self._resource_btn.setEnabled(bool(course and course.course_resource))
         if course is None:
             self._course_code.setText("选择一门课程")
             self._course_code.setStyleSheet("font-size: 18px; font-weight: bold; background: #242424; border-radius: 8px;")
@@ -216,6 +222,14 @@ class ScheduleWindow(QWidget):
         self._course_location.setText(f"地点\n{course.location or '未填写'}")
         self._course_instructor.setText(f"教师\n{course.instructor or '未填写'}")
         self._course_notes.setText(f"备注\n{course.notes}" if course.notes else "")
+
+    def _open_selected_course_resource(self) -> None:
+        course = self._selected_course()
+        if course is None or not course.course_resource:
+            return
+        opened, error = open_course_resource(course.course_resource)
+        if not opened:
+            QMessageBox.warning(self, "无法打开课程资料", error)
 
     def _edit_selected_course(self) -> None:
         term = self._active_term()

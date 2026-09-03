@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -207,6 +208,16 @@ class CourseEditDialog(QDialog):
         detail_row.addLayout(instructor_col)
         layout.addLayout(detail_row)
 
+        layout.addWidget(QLabel("课程资料（Syllabus / Course Web，可选）"))
+        resource_row = QHBoxLayout()
+        self._course_resource = QLineEdit(course.course_resource if course else "")
+        self._course_resource.setPlaceholderText("粘贴 https:// 网址，或选择本地 PDF")
+        choose_resource = QPushButton("选择 PDF")
+        choose_resource.clicked.connect(self._choose_course_resource)
+        resource_row.addWidget(self._course_resource, 1)
+        resource_row.addWidget(choose_resource)
+        layout.addLayout(resource_row)
+
         layout.addWidget(QLabel("课程颜色"))
         color_row = QHBoxLayout()
         self._color_group = QButtonGroup(self)
@@ -247,6 +258,16 @@ class CourseEditDialog(QDialog):
     def _set_color(self, color: str) -> None:
         self._selected_color = color
 
+    def _choose_course_resource(self) -> None:
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择课程 Syllabus",
+            "",
+            "PDF 文件 (*.pdf)",
+        )
+        if file_name:
+            self._course_resource.setText(file_name)
+
     def _on_unscheduled_changed(self, checked: bool) -> None:
         for button in self._weekday_buttons:
             button.setEnabled(not checked)
@@ -281,6 +302,7 @@ class CourseEditDialog(QDialog):
             "end_time": None if unscheduled else self._end_time.time().toPyTime(),
             "color": self._selected_color,
             "notes": self._notes.toPlainText().strip(),
+            "course_resource": self._course_resource.text().strip(),
         }
 
 

@@ -103,6 +103,7 @@ class ScheduleStore:
                     end_time=course.end_time,
                     color=course.color,
                     notes=course.notes,
+                    course_resource=course.course_resource,
                 )
             )
         self.add_term(duplicate)

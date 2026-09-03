@@ -795,7 +795,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.4")
+        label = QLabel("DeskToDo\n版本 1.5")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
