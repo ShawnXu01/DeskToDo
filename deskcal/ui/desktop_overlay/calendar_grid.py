@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from deskcal.core.models import DatedTask
-from deskcal.core.storage import TaskStore
+from deskcal.core.storage import TaskStore, normalize_calendar_font_scale
 from deskcal.services.lunar_holiday import get_day_lunar_info, get_special_day_label
 from deskcal.ui.desktop_overlay.task_chip import TaskChipWidget
 from deskcal.ui.dialogs.task_dialog import PRIORITY_COLORS, TaskDialog
@@ -32,6 +32,18 @@ WEEKDAY_HEADER_LABELS = ["周一", "周二", "周三", "周四", "周五", "周�
 ROWS = 6
 COLS = 7
 
+BASE_MONTH_TITLE_SIZE = 16
+BASE_NAV_BUTTON_SIZE = 13
+BASE_WEEKDAY_SIZE = 12
+BASE_DATE_SIZE = 13
+BASE_TODAY_BADGE_SIZE = 10
+BASE_LUNAR_SIZE = 11
+BASE_TASK_SIZE = 13
+
+
+def scaled_font_size(base_size: int, scale: int) -> int:
+    return max(1, round(base_size * normalize_calendar_font_scale(scale) / 100))
+
 
 class DayCellWidget(QFrame):
     """单个日期格子：日期数字 + 当天命中任务的可滚动列表。"""
@@ -41,6 +53,7 @@ class DayCellWidget(QFrame):
         day: date,
         is_current_month: bool,
         is_today: bool,
+        font_scale: int,
         on_create_requested: Callable[[date], None],
         on_jump_to_month: Callable[[date], None],
         parent=None,
@@ -50,6 +63,7 @@ class DayCellWidget(QFrame):
         self._is_current_month = is_current_month
         self._on_create_requested = on_create_requested
         self._on_jump_to_month = on_jump_to_month
+        self._font_scale = font_scale
 
         self.setObjectName("dayCell")
         self.setFrameShape(QFrame.Shape.Box)
@@ -68,15 +82,22 @@ class DayCellWidget(QFrame):
         if is_today:
             date_label.setStyleSheet(
                 "color: #ffffff; background-color: #e53935; border-radius: 8px;"
-                "padding: 0px 4px; font-size: 13px; font-weight: bold;"
+                f"padding: 0px 4px; font-size: {scaled_font_size(BASE_DATE_SIZE, font_scale)}px; "
+                "font-weight: bold;"
             )
         else:
-            date_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: bold;")
+            date_label.setStyleSheet(
+                f"color: #ffffff; font-size: {scaled_font_size(BASE_DATE_SIZE, font_scale)}px; "
+                "font-weight: bold;"
+            )
         header_row.addWidget(date_label)
 
         if is_today:
             today_badge = QLabel("今天")
-            today_badge.setStyleSheet("color: #e53935; font-size: 10px; font-weight: bold;")
+            today_badge.setStyleSheet(
+                f"color: #e53935; font-size: {scaled_font_size(BASE_TODAY_BADGE_SIZE, font_scale)}px; "
+                "font-weight: bold;"
+            )
             header_row.addWidget(today_badge)
 
         lunar_info = get_day_lunar_info(day)
@@ -85,7 +106,8 @@ class DayCellWidget(QFrame):
         lunar_label = ElidingLabel(lunar_text)
         is_holiday_label = bool(special_label or lunar_info.festival_text)
         lunar_label.setStyleSheet(
-            f"color: {'#ffd54f' if is_holiday_label else '#cccccc'}; font-size: 11px; font-weight: bold;"
+            f"color: {'#ffd54f' if is_holiday_label else '#cccccc'}; "
+            f"font-size: {scaled_font_size(BASE_LUNAR_SIZE, font_scale)}px; font-weight: bold;"
         )
         lunar_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         # Ignored 让某一天的长文字不会把所在列顶宽；stretch=1 仍然给它格子里剩余的全部宽度。
@@ -134,6 +156,7 @@ class DayCellWidget(QFrame):
                 name=task.name,
                 color=PRIORITY_COLORS[task.priority],
                 completed=task.is_completed_on(self._day),
+                font_size=scaled_font_size(BASE_TASK_SIZE, self._font_scale),
             )
             chip.editRequested.connect(lambda t=task: on_edit(t))
 
@@ -158,6 +181,7 @@ class CalendarGrid(QWidget):
         today = date.today()
         self._year = today.year
         self._month = today.month
+        self._font_scale = 100
 
         self._outer_layout = QVBoxLayout(self)
         self._outer_layout.setContentsMargins(4, 4, 4, 4)
@@ -168,7 +192,6 @@ class CalendarGrid(QWidget):
         self._next_btn = QPushButton("下月")
         self._title_label = QLabel()
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_label.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: bold;")
         self._prev_btn.clicked.connect(self._go_prev_month)
         self._next_btn.clicked.connect(self._go_next_month)
         header_row.addWidget(self._prev_btn)
@@ -183,18 +206,42 @@ class CalendarGrid(QWidget):
             self._grid_layout.setColumnStretch(col, 1)
         # 星期表头放进跟日期格子同一个 QGridLayout 的第 0 行，两者共用同一份列宽分配，
         # 才能保证表头文字永远跟下面的格子列对齐（之前是两个独立布局，宽度可能各算各的）。
+        self._weekday_labels: list[QLabel] = []
         for col, label in enumerate(WEEKDAY_HEADER_LABELS):
             lbl = QLabel(label)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet("color: #dddddd; font-size: 12px; font-weight: bold; background: transparent;")
             self._grid_layout.addWidget(lbl, 0, col)
+            self._weekday_labels.append(lbl)
         self._grid_layout.setRowStretch(0, 0)
         for row in range(1, ROWS + 1):
             self._grid_layout.setRowStretch(row, 1)
         self._outer_layout.addWidget(self._grid_widget, 1)
 
         self._day_cells: list[DayCellWidget] = []
+        self._apply_static_font_styles()
         self.render()
+
+    def set_font_scale(self, scale: int) -> None:
+        normalized = normalize_calendar_font_scale(scale)
+        if normalized == self._font_scale:
+            return
+        self._font_scale = normalized
+        self._apply_static_font_styles()
+        self.render()
+
+    def _apply_static_font_styles(self) -> None:
+        self._title_label.setStyleSheet(
+            f"color: #ffffff; font-size: {scaled_font_size(BASE_MONTH_TITLE_SIZE, self._font_scale)}px; "
+            "font-weight: bold;"
+        )
+        button_size = scaled_font_size(BASE_NAV_BUTTON_SIZE, self._font_scale)
+        for button in (self._prev_btn, self._next_btn):
+            button.setStyleSheet(f"font-size: {button_size}px;")
+        weekday_size = scaled_font_size(BASE_WEEKDAY_SIZE, self._font_scale)
+        for label in self._weekday_labels:
+            label.setStyleSheet(
+                f"color: #dddddd; font-size: {weekday_size}px; font-weight: bold; background: transparent;"
+            )
 
     def _go_prev_month(self) -> None:
         if self._month == 1:
@@ -249,7 +296,14 @@ class CalendarGrid(QWidget):
             is_current_month = day.month == self._month and day.year == self._year
             is_today = day == today
 
-            cell = DayCellWidget(day, is_current_month, is_today, self._open_create_dialog, self._jump_to_month)
+            cell = DayCellWidget(
+                day,
+                is_current_month,
+                is_today,
+                self._font_scale,
+                self._open_create_dialog,
+                self._jump_to_month,
+            )
 
             day_tasks = [t for t in all_dated_tasks if t.recurrence.occurs_on(day)]
             day_tasks.sort(key=lambda t: t.sort_key(day))

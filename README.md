@@ -4,7 +4,7 @@
 
 DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期任务、无日期待办、课程表和常用信息组件集中在一个可调整的桌面面板中。程序通过系统托盘运行，默认不抢占普通窗口；布局、外观和数据均保存在当前 Windows 用户目录下。
 
-当前版本：**v1.5**
+当前版本：**v1.6**
 
 [下载最新版](https://github.com/ShawnXu01/DeskToDo/releases/latest) · [完整用户指南](USER_GUIDE.md) · [已知问题](docs/known-issues.md)
 
@@ -49,6 +49,7 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 ### 桌面体验与数据
 
 - 悬浮面板背景透明度、设置面板透明度和设置背景图均可调整。
+- 日历字体大小可按显示器单独设置，主界面跨屏时自动恢复对应字号。
 - 解锁后可移动、缩放窗口，并调整左侧宽度及课表区域高度。
 - 按当前显示器组合分别记忆窗口位置和布局，适合笔记本与外接显示器切换。
 - 内置 2026 年节假日数据，并显示常见公历节日、农历节日和按规则计算的节日；支持导入自定义年度 JSON。
@@ -59,7 +60,7 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 
 ### 使用安装包
 
-1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.5.exe`。
+1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.6.exe`。
 2. 运行安装程序，选择安装目录，并按需创建桌面快捷方式或启用开机自启动。
 3. 安装完成后启动 DeskToDo，按首次启动向导配置天气和可选的 Gist 同步。
 
@@ -91,6 +92,7 @@ DeskToDo 启动后会显示桌面面板，并在 Windows 通知区域保留托�
 | 课前提醒 | 设置 → 桌面组件 → 课表 → 设置 | 启用 Windows 通知并设置提前分钟数 |
 | 节假日 JSON | 设置 → 节假日信息 | 导入会替换当前导入的数据，不是追加合并 |
 | 开机自启动 | 设置 → UI 调整 | 切换后立即更新当前用户的启动项 |
+| 日历字体大小 | 设置 → UI 调整 | 只调整右侧日历，并按主界面当前所在显示器分别记忆 |
 | 设置背景图 | 设置 → UI 调整 | 选择本地图片作为设置面板背景 |
 
 ## GitHub Gist 同步
@@ -129,7 +131,7 @@ Token 使用 Windows DPAPI 加密，且与当前 Windows 用户绑定。换电�
 | `tasks.json` | 日期任务、无日期待办及同步删除记录 |
 | `schedule.json` | 学期和课程 |
 | `widgets.json` | 组件状态、顺序及各组件配置 |
-| `window_state.json` | 不同显示器组合下的窗口位置和布局 |
+| `window_state.json` | 不同显示器组合下的窗口位置和布局，以及各显示器的日历字号 |
 | `appearance.json` | 透明度、设置背景图、开机自启动和引导状态 |
 | `holidays.json` | 导入或内置的年度节假日数据 |
 | `credentials.json` | 首次启动状态、加密后的 Gist Token 和 Gist ID |
@@ -184,7 +186,7 @@ python -m PyInstaller desktodo.spec --noconfirm
 构建产物：
 
 - `dist/DeskToDo/`：PyInstaller 单目录应用；
-- `installer_output/DeskToDo-Setup-1.5.exe`：Inno Setup 安装包。
+- `installer_output/DeskToDo-Setup-1.6.exe`：Inno Setup 安装包。
 
 > `desktodo.spec` 会把 `secrets/qweather/` 一并打包。私钥进入客户端后，理论上可以被提取并滥用天气服务额度。当前项目接受这一分发模型；若面向不受信任的公众大规模发布，应改为服务端代理，不能继续把私钥放入客户端。
 
@@ -214,7 +216,7 @@ DeskToDo/
 
 ## 当前边界与路线图
 
-- v1.5 仅面向 Windows 桌面端。
+- v1.6 仅面向 Windows 桌面端。
 - Gist 当前只同步任务，不同步课表或界面配置。
 - 默认只内置 2026 年需要按年份维护的节假日数据；其他年份可导入 JSON。
 - V2 的跨端协同仍处于方案规划阶段，尚未实现，详见 [`docs/v2-mobile-sync-plan.md`](docs/v2-mobile-sync-plan.md)。
