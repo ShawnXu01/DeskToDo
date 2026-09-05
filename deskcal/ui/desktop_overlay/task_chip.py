@@ -15,9 +15,10 @@ class TaskChipWidget(QWidget):
     editRequested = pyqtSignal()
     toggleCompleteRequested = pyqtSignal(bool)
 
-    def __init__(self, *, name: str, color: str, completed: bool, parent=None):
+    def __init__(self, *, name: str, color: str, completed: bool, font_size: int | None = None, parent=None):
         super().__init__(parent)
         self._completed = completed
+        self._font_size = font_size
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 1, 2, 1)
@@ -40,7 +41,8 @@ class TaskChipWidget(QWidget):
 
     def _apply_text_style(self) -> None:
         color = "#aaaaaa" if self._completed else "#ffffff"
-        self._name_label.setStyleSheet(f"color: {color};")
+        font_size = f" font-size: {self._font_size}px;" if self._font_size is not None else ""
+        self._name_label.setStyleSheet(f"color: {color};{font_size}")
 
     def mouseDoubleClickEvent(self, event) -> None:
         self.editRequested.emit()

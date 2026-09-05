@@ -112,6 +112,34 @@ def test_window_geometry_saves_new_left_split_fields(tmp_path, monkeypatch):
     assert "sidebar_width" not in profile
 
 
+def test_calendar_font_scale_is_saved_per_screen_without_changing_layout(tmp_path, monkeypatch):
+    state_file = tmp_path / "window_state.json"
+    monkeypatch.setattr(storage, "get_window_state_file", lambda: state_file)
+    storage.save_window_geometry("monitor", 10, 20, 1100, 700, 420, 0.58, True)
+
+    storage.save_calendar_font_scale("internal-screen", 115)
+    storage.save_calendar_font_scale("external-screen", 150)
+
+    assert storage.load_calendar_font_scale("internal-screen") == 115
+    assert storage.load_calendar_font_scale("external-screen") == 150
+    assert storage.load_calendar_font_scale("unknown-screen") == storage.DEFAULT_CALENDAR_FONT_SCALE
+    assert storage.load_window_geometry("monitor")["width"] == 1100
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (20, storage.MIN_CALENDAR_FONT_SCALE),
+        (120.6, 121),
+        (999, storage.MAX_CALENDAR_FONT_SCALE),
+        (True, storage.DEFAULT_CALENDAR_FONT_SCALE),
+        ("large", storage.DEFAULT_CALENDAR_FONT_SCALE),
+    ],
+)
+def test_calendar_font_scale_is_normalized(value, expected):
+    assert storage.normalize_calendar_font_scale(value) == expected
+
+
 def test_main_tour_version_is_independent_and_persisted(tmp_path, monkeypatch):
     appearance_file = tmp_path / "appearance.json"
     monkeypatch.setattr(storage, "get_appearance_file", lambda: appearance_file)

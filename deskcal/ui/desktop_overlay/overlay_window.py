@@ -25,9 +25,12 @@ from PyQt6.QtWidgets import (
 from deskcal.core.storage import (
     TaskStore,
     get_main_tour_completed_version,
+    load_calendar_font_scale,
     load_appearance,
     load_window_geometry,
     mark_main_tour_completed,
+    normalize_calendar_font_scale,
+    save_calendar_font_scale,
     save_appearance,
     save_window_geometry,
 )
@@ -40,7 +43,7 @@ from deskcal.ui.desktop_overlay.widgets.registry import WIDGET_DEFINITIONS, Widg
 from deskcal.ui.onboarding.guided_tour import GuidedTourOverlay, TOUR_VERSION
 from deskcal.ui.style_utils import make_scroll_area_transparent
 from deskcal.utils import crypto
-from deskcal.utils.monitor import compute_monitor_signature
+from deskcal.utils.monitor import compute_monitor_signature, compute_screen_signature, describe_screen
 
 PANEL_RADIUS = 16
 PANEL_COLOR = QColor(20, 20, 20, 230)
@@ -292,6 +295,9 @@ class OverlayWindow(QWidget):
         self._left_top_ratio = DEFAULT_LEFT_TOP_RATIO
         self._left_split_manual = False
         self._schedule_enabled = False
+        self._calendar_screen_signature = ""
+        self._calendar_screen_label = ""
+        self._screen_signal_connected = False
         self._restore_geometry()
 
         self._panel_alpha = load_appearance().get("panel_alpha", PANEL_COLOR.alpha())
@@ -341,6 +347,7 @@ class OverlayWindow(QWidget):
 
         self._calendar = CalendarGrid(store)
         layout.addWidget(self._calendar, 1)
+        self._refresh_calendar_font_for_current_screen()
 
         self.render_widgets()
 
@@ -396,6 +403,33 @@ class OverlayWindow(QWidget):
             return
         self._monitor_signature = signature
         self._apply_saved_or_default_geometry()
+        self._refresh_calendar_font_for_current_screen()
+
+    def _current_screen(self):
+        return QGuiApplication.screenAt(self.frameGeometry().center()) or self.screen()
+
+    def _refresh_calendar_font_for_current_screen(self) -> None:
+        if not hasattr(self, "_calendar"):
+            return
+        screen = self._current_screen()
+        if screen is None:
+            return
+        signature = compute_screen_signature(screen)
+        if signature == self._calendar_screen_signature:
+            return
+        self._calendar_screen_signature = signature
+        self._calendar_screen_label = describe_screen(screen)
+        scale = load_calendar_font_scale(signature)
+        self._calendar.set_font_scale(scale)
+        if self._config_window is not None:
+            self._config_window.set_calendar_font_context(scale, self._calendar_screen_label)
+
+    def _set_current_calendar_font_scale(self, scale: int) -> None:
+        if not self._calendar_screen_signature:
+            self._refresh_calendar_font_for_current_screen()
+        normalized = normalize_calendar_font_scale(scale)
+        save_calendar_font_scale(self._calendar_screen_signature, normalized)
+        self._calendar.set_font_scale(normalized)
 
     def _apply_saved_or_default_geometry(self) -> None:
         saved = load_window_geometry(self._monitor_signature)
@@ -534,6 +568,9 @@ class OverlayWindow(QWidget):
                 sync_manager=self._sync_manager,
                 current_panel_alpha=self._panel_alpha,
                 on_panel_alpha_changed=self.set_panel_alpha,
+                current_calendar_font_scale=load_calendar_font_scale(self._calendar_screen_signature),
+                current_calendar_screen_label=self._calendar_screen_label,
+                on_calendar_font_scale_changed=self._set_current_calendar_font_scale,
                 on_holidays_changed=self._calendar.render,
             )
         self._config_window.show()
@@ -549,6 +586,18 @@ class OverlayWindow(QWidget):
             self._guided_tour.setGeometry(self.rect())
         self.set_left_area_width(self._left_area_width)
         self._apply_left_split()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        window_handle = self.windowHandle()
+        if window_handle is not None and not self._screen_signal_connected:
+            window_handle.screenChanged.connect(lambda _screen: self._refresh_calendar_font_for_current_screen())
+            self._screen_signal_connected = True
+        self._refresh_calendar_font_for_current_screen()
+
+    def moveEvent(self, event) -> None:
+        super().moveEvent(event)
+        self._refresh_calendar_font_for_current_screen()
 
     def set_locked(self, locked: bool) -> None:
         self._locked = locked

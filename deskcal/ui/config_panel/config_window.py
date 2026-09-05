@@ -27,7 +27,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from deskcal.core.storage import list_window_profiles, load_appearance, save_appearance
+from deskcal.core.storage import (
+    MAX_CALENDAR_FONT_SCALE,
+    MIN_CALENDAR_FONT_SCALE,
+    list_window_profiles,
+    load_appearance,
+    normalize_calendar_font_scale,
+    save_appearance,
+)
 from deskcal.services import autostart
 from deskcal.services.lunar_holiday import get_holidays_file
 from deskcal.services.sync_manager import SyncManager
@@ -543,10 +550,14 @@ class UISettingsTab(QWidget):
         self,
         current_panel_alpha: int,
         on_panel_alpha_changed: Callable[[int], None],
+        current_calendar_font_scale: int,
+        current_calendar_screen_label: str,
+        on_calendar_font_scale_changed: Callable[[int], None],
         parent=None,
     ):
         super().__init__(parent)
         self._on_panel_alpha_changed = on_panel_alpha_changed
+        self._on_calendar_font_scale_changed = on_calendar_font_scale_changed
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -562,6 +573,30 @@ class UISettingsTab(QWidget):
         row.addWidget(self._slider, 1)
         row.addWidget(self._value_label)
         layout.addLayout(row)
+
+        layout.addSpacing(6)
+        layout.addWidget(QLabel("日历字体大小（当前显示器）"))
+        self._calendar_screen_label = QLabel(current_calendar_screen_label)
+        self._calendar_screen_label.setObjectName("widgetDescription")
+        self._calendar_screen_label.setWordWrap(True)
+        layout.addWidget(self._calendar_screen_label)
+
+        font_row = QHBoxLayout()
+        self._calendar_font_slider = QSlider(Qt.Orientation.Horizontal)
+        self._calendar_font_slider.setRange(MIN_CALENDAR_FONT_SCALE, MAX_CALENDAR_FONT_SCALE)
+        self._calendar_font_slider.setSingleStep(5)
+        self._calendar_font_slider.setPageStep(10)
+        self._calendar_font_slider.setValue(normalize_calendar_font_scale(current_calendar_font_scale))
+        self._calendar_font_value_label = QLabel(f"{self._calendar_font_slider.value()}%")
+        self._calendar_font_slider.valueChanged.connect(self._on_calendar_font_slider_changed)
+        font_row.addWidget(self._calendar_font_slider, 1)
+        font_row.addWidget(self._calendar_font_value_label)
+        layout.addLayout(font_row)
+
+        font_hint = QLabel("只调整右侧日历；每块显示器单独记忆，主界面跨屏后会自动恢复对应字号。")
+        font_hint.setObjectName("widgetDescription")
+        font_hint.setWordWrap(True)
+        layout.addWidget(font_hint)
 
         self._autostart_checkbox = QCheckBox("开机自动启动")
         self._autostart_checkbox.setChecked(load_appearance()["autostart_enabled"])
@@ -581,6 +616,18 @@ class UISettingsTab(QWidget):
         self._value_label.setText(f"{percent}%")
         alpha = round(percent / 100 * 255)
         self._on_panel_alpha_changed(alpha)
+
+    def _on_calendar_font_slider_changed(self, percent: int) -> None:
+        self._calendar_font_value_label.setText(f"{percent}%")
+        self._on_calendar_font_scale_changed(percent)
+
+    def set_calendar_font_context(self, scale: int, screen_label: str) -> None:
+        normalized = normalize_calendar_font_scale(scale)
+        self._calendar_screen_label.setText(screen_label)
+        self._calendar_font_slider.blockSignals(True)
+        self._calendar_font_slider.setValue(normalized)
+        self._calendar_font_slider.blockSignals(False)
+        self._calendar_font_value_label.setText(f"{normalized}%")
 
 
 class HolidayInfoTab(QWidget):
@@ -795,7 +842,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.5")
+        label = QLabel("DeskToDo\n版本 1.6")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
@@ -821,6 +868,9 @@ class ConfigWindow(QWidget):
         sync_manager: Optional[SyncManager] = None,
         current_panel_alpha: int = 230,
         on_panel_alpha_changed: Optional[Callable[[int], None]] = None,
+        current_calendar_font_scale: int = 100,
+        current_calendar_screen_label: str = "",
+        on_calendar_font_scale_changed: Optional[Callable[[int], None]] = None,
         on_holidays_changed: Optional[Callable[[], None]] = None,
         parent=None,
     ):
@@ -884,12 +934,14 @@ class ConfigWindow(QWidget):
         layout.addWidget(content, 1)
 
         self._stack.addWidget(WidgetsTab(store, on_widgets_changed))
-        self._stack.addWidget(
-            UISettingsTab(
-                current_panel_alpha,
-                on_panel_alpha_changed or (lambda alpha: None),
-            )
+        self._ui_settings_tab = UISettingsTab(
+            current_panel_alpha,
+            on_panel_alpha_changed or (lambda alpha: None),
+            current_calendar_font_scale,
+            current_calendar_screen_label,
+            on_calendar_font_scale_changed or (lambda scale: None),
         )
+        self._stack.addWidget(self._ui_settings_tab)
         self._stack.addWidget(SyncTab(sync_manager))
         self._stack.addWidget(HolidayInfoTab(on_holidays_changed or (lambda: None)))
         self._stack.addWidget(MonitorSettingsTab())
@@ -905,3 +957,6 @@ class ConfigWindow(QWidget):
         title, subtitle = self._PAGE_INFO[index]
         self._page_title.setText(title)
         self._page_subtitle.setText(subtitle)
+
+    def set_calendar_font_context(self, scale: int, screen_label: str) -> None:
+        self._ui_settings_tab.set_calendar_font_context(scale, screen_label)

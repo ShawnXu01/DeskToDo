@@ -18,6 +18,9 @@ APPEARANCE_FILE_NAME = "appearance.json"
 TOMBSTONE_RETENTION_DAYS = 90
 DEFAULT_PANEL_ALPHA = 230
 DEFAULT_CONFIG_PANEL_ALPHA = 210
+DEFAULT_CALENDAR_FONT_SCALE = 100
+MIN_CALENDAR_FONT_SCALE = 80
+MAX_CALENDAR_FONT_SCALE = 160
 
 
 def get_data_dir() -> Path:
@@ -87,6 +90,13 @@ def _load_window_state_payload() -> dict:
     return {"profiles": {}}
 
 
+def normalize_calendar_font_scale(value) -> int:
+    """把持久化或 UI 传入的日历字号比例限制在受支持范围内。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return DEFAULT_CALENDAR_FONT_SCALE
+    return max(MIN_CALENDAR_FONT_SCALE, min(MAX_CALENDAR_FONT_SCALE, round(value)))
+
+
 def list_window_profiles() -> dict[str, dict]:
     """返回 {显示器签名: 几何信息}，给设置面板的"显示屏设置"页展示用。"""
     return _load_window_state_payload()["profiles"]
@@ -94,6 +104,24 @@ def list_window_profiles() -> dict[str, dict]:
 
 def load_window_geometry(signature: str) -> Optional[dict]:
     return list_window_profiles().get(signature)
+
+
+def load_calendar_font_scale(screen_signature: str) -> int:
+    preferences = _load_window_state_payload().get("screen_preferences", {})
+    if not isinstance(preferences, dict):
+        return DEFAULT_CALENDAR_FONT_SCALE
+    screen_preferences = preferences.get(screen_signature, {})
+    if not isinstance(screen_preferences, dict):
+        return DEFAULT_CALENDAR_FONT_SCALE
+    return normalize_calendar_font_scale(screen_preferences.get("calendar_font_scale"))
+
+
+def save_calendar_font_scale(screen_signature: str, scale: int) -> None:
+    payload = _load_window_state_payload()
+    preferences = payload.setdefault("screen_preferences", {})
+    screen_preferences = preferences.setdefault(screen_signature, {})
+    screen_preferences["calendar_font_scale"] = normalize_calendar_font_scale(scale)
+    atomic_write_json(get_window_state_file(), payload)
 
 
 def save_window_geometry(
