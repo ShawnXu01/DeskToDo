@@ -4,7 +4,7 @@
 
 DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期任务、无日期待办、课程表和常用信息组件集中在一个可调整的桌面面板中。程序通过系统托盘运行，默认不抢占普通窗口；布局、外观和数据均保存在当前 Windows 用户目录下。
 
-当前版本：**v1.6**
+当前版本：**v1.7**
 
 [下载最新版](https://github.com/ShawnXu01/DeskToDo/releases/latest) · [完整用户指南](USER_GUIDE.md) · [已知问题](docs/known-issues.md)
 
@@ -17,6 +17,7 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 ### 日历与待办
 
 - 月视图日历，一周从星期一开始，支持切换月份和点击相邻月份日期跳转。
+- 今天所在的日期格使用红色边框突出显示，不改变其他日期格的布局与样式。
 - 日期任务支持四种重复规则：单次、日期范围内每天、日期范围内指定星期、指定多个日期。
 - 重复任务按日期分别记录完成状态，不会因完成某一次而影响其他日期。
 - 独立的无日期待办，适合记录暂时没有截止日期的事项。
@@ -44,7 +45,7 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 | 倒计时 | 同时展示多个目标日期的剩余时间 |
 | 进度条 | 按起止日期展示多个事项的时间进度 |
 
-所有组件均可在设置面板中启用或关闭；普通组件还可以调整顺序。
+所有组件均可在设置面板中启用或关闭；普通组件还可以调整顺序。右键桌面上的任意组件会直接打开设置界面并定位到该组件；有独立选项的组件会同时打开对应设置窗口，后续注册的新组件也沿用这一入口。
 
 ### 桌面体验与数据
 
@@ -55,12 +56,13 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 - 内置 2026 年节假日数据，并显示常见公历节日、农历节日和按规则计算的节日；支持导入自定义年度 JSON。
 - 可选 GitHub Gist 同步，在多台电脑间合并日期任务和无日期待办。
 - 支持开机自启动、首次启动向导、主界面引导和托盘临时隐藏 15 秒。
+- 应用窗口、系统托盘、任务栏、桌面/开始菜单快捷方式和安装程序统一使用 DeskToDo 新图标。
 
 ## 安装
 
 ### 使用安装包
 
-1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.6.exe`。
+1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.7.exe`。
 2. 运行安装程序，选择安装目录，并按需创建桌面快捷方式或启用开机自启动。
 3. 安装完成后启动 DeskToDo，按首次启动向导配置天气和可选的 Gist 同步。
 
@@ -186,7 +188,7 @@ python -m PyInstaller desktodo.spec --noconfirm
 构建产物：
 
 - `dist/DeskToDo/`：PyInstaller 单目录应用；
-- `installer_output/DeskToDo-Setup-1.6.exe`：Inno Setup 安装包。
+- `installer_output/DeskToDo-Setup-1.7.exe`：Inno Setup 安装包。
 
 > `desktodo.spec` 会把 `secrets/qweather/` 一并打包。私钥进入客户端后，理论上可以被提取并滥用天气服务额度。当前项目接受这一分发模型；若面向不受信任的公众大规模发布，应改为服务端代理，不能继续把私钥放入客户端。
 
@@ -216,7 +218,7 @@ DeskToDo/
 
 ## 当前边界与路线图
 
-- v1.6 仅面向 Windows 桌面端。
+- v1.7 正式安装包仅面向 Windows 桌面端；同版本功能与文档已同步到 `codex/macos-port`，macOS 二进制仍待 Mac 实机或 macOS CI 验证。
 - Gist 当前只同步任务，不同步课表或界面配置。
 - 默认只内置 2026 年需要按年份维护的节假日数据；其他年份可导入 JSON。
 - V2 的跨端协同仍处于方案规划阶段，尚未实现，详见 [`docs/v2-mobile-sync-plan.md`](docs/v2-mobile-sync-plan.md)。

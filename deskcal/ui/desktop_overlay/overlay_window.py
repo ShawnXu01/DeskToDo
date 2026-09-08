@@ -547,12 +547,14 @@ class OverlayWindow(QWidget):
         for instance in self._widget_store.enabled_items():
             if instance.type_id == "floating_todo":
                 self._sidebar = SidebarTodo(self._store)
+                self._enable_widget_settings(self._sidebar, instance.type_id)
                 self._widget_area_layout.insertWidget(self._widget_area_layout.count() - 1, self._sidebar)
                 continue
             definition = WIDGET_DEFINITIONS[instance.type_id]
             if definition.widget_class is None:
                 continue
             widget = definition.widget_class(instance.config)
+            self._enable_widget_settings(widget, instance.type_id)
             if instance.type_id == "schedule":
                 self._schedule_layout.addWidget(widget)
                 self._schedule_enabled = True
@@ -560,7 +562,13 @@ class OverlayWindow(QWidget):
             self._widget_area_layout.insertWidget(self._widget_area_layout.count() - 1, widget)
         self._apply_left_split()
 
-    def open_config_panel(self) -> None:
+    def _enable_widget_settings(self, widget: QWidget, type_id: str) -> None:
+        widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        widget.customContextMenuRequested.connect(
+            lambda _position, target_type_id=type_id: self.open_config_panel(target_type_id)
+        )
+
+    def open_config_panel(self, widget_type_id: Optional[str] = None) -> None:
         if self._config_window is None:
             self._config_window = ConfigWindow(
                 self._widget_store,
@@ -576,6 +584,11 @@ class OverlayWindow(QWidget):
         self._config_window.show()
         self._config_window.raise_()
         self._config_window.activateWindow()
+        if isinstance(widget_type_id, str):
+            QTimer.singleShot(
+                0,
+                lambda target_type_id=widget_type_id: self._config_window.open_widget_settings(target_type_id),
+            )
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

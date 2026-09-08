@@ -531,6 +531,22 @@ class WidgetsTab(QWidget):
         self._on_changed()
         self.render()
 
+    def open_widget_settings(self, type_id: str) -> None:
+        index = next(
+            (index for index, instance in enumerate(self._store.items) if instance.type_id == type_id),
+            None,
+        )
+        if index is None:
+            return
+        for row in range(self._list.count()):
+            item = self._list.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == type_id:
+                self._list.setCurrentItem(item)
+                self._list.scrollToItem(item)
+                break
+        if WIDGET_DEFINITIONS[type_id].configurable:
+            self._open_settings(index)
+
     def _open_settings(self, index: int) -> None:
         instance = self._store.items[index]
         dialog_class = SETTINGS_DIALOGS.get(instance.type_id)
@@ -842,7 +858,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.6")
+        label = QLabel("DeskToDo\n版本 1.7")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
@@ -933,7 +949,8 @@ class ConfigWindow(QWidget):
         content_layout.addWidget(self._stack, 1)
         layout.addWidget(content, 1)
 
-        self._stack.addWidget(WidgetsTab(store, on_widgets_changed))
+        self._widgets_tab = WidgetsTab(store, on_widgets_changed)
+        self._stack.addWidget(self._widgets_tab)
         self._ui_settings_tab = UISettingsTab(
             current_panel_alpha,
             on_panel_alpha_changed or (lambda alpha: None),
@@ -960,3 +977,7 @@ class ConfigWindow(QWidget):
 
     def set_calendar_font_context(self, scale: int, screen_label: str) -> None:
         self._ui_settings_tab.set_calendar_font_context(scale, screen_label)
+
+    def open_widget_settings(self, type_id: str) -> None:
+        self._nav_list.setCurrentRow(0)
+        self._widgets_tab.open_widget_settings(type_id)

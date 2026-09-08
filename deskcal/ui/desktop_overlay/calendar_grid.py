@@ -68,9 +68,10 @@ class DayCellWidget(QFrame):
         self.setObjectName("dayCell")
         self.setFrameShape(QFrame.Shape.Box)
         # #dayCell 限定只让外圈边框变亮，否则 QFrame 选择器会级联到内部的 QScrollArea。
+        border_color = "#e53935" if is_today else "rgba(255, 255, 255, 160)"
         self.setStyleSheet(
             "QFrame { border: 1px solid rgba(255, 255, 255, 25); background: transparent; }"
-            "QFrame#dayCell { border: 2px solid rgba(255, 255, 255, 160); }"
+            f"QFrame#dayCell {{ border: 2px solid {border_color}; }}"
         )
 
         layout = QVBoxLayout(self)

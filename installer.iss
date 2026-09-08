@@ -2,7 +2,7 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "1.6"
+#define MyAppVersion "1.7"
 #define MyAppExeName "DeskToDo.exe"
 
 [Setup]
@@ -34,7 +34,7 @@ Source: "dist\DeskToDo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
