@@ -2,8 +2,9 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "1.7"
+#define MyAppVersion "1.8"
 #define MyAppExeName "DeskToDo.exe"
+#define MyAppIconName "DeskToDo-v1.8.ico"
 
 [Setup]
 AppId={{8F2C9C9C-2B9B-4B3C-9B2A-DESKTODO0001}}
@@ -31,11 +32,12 @@ Name: "autostart"; Description: "开机自动启动 DeskToDo"; GroupDescription:
 
 [Files]
 Source: "dist\DeskToDo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "deskcal\assets\images\logo.ico"; DestDir: "{app}"; DestName: "{#MyAppIconName}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"
+Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\{#MyAppIconName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DeskCal"; ValueData: """{app}\{#MyAppExeName}"" --background"; Flags: uninsdeletevalue; Tasks: autostart

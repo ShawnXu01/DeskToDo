@@ -4,7 +4,7 @@
 
 DeskToDo 常驻在桌面壁纸上方、普通窗口下方，把月历、日期任务、无日期待办、课程表和常用信息组件集中在一个可调整的桌面面板中。程序通过系统托盘运行，默认不抢占普通窗口；布局、外观和数据均保存在当前 Windows 用户目录下。
 
-当前版本：**v1.7**
+当前版本：**v1.8**
 
 [下载最新版](https://github.com/ShawnXu01/DeskToDo/releases/latest) · [完整用户指南](USER_GUIDE.md) · [已知问题](docs/known-issues.md)
 
@@ -16,7 +16,8 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 
 ### 日历与待办
 
-- 月视图日历，一周从星期一开始，支持切换月份和点击相邻月份日期跳转。
+- 提供两种月历浏览方式：点击模式保留原有翻月与相邻日期跳转；滚动模式按独立月份连续上下浏览。
+- 滚动模式支持 25%–150% 灵敏度调节；停止滚动 15 秒后自动回到当前月，并根据视野位置调整月份明暗。
 - 今天所在的日期格使用红色边框突出显示，不改变其他日期格的布局与样式。
 - 日期任务支持四种重复规则：单次、日期范围内每天、日期范围内指定星期、指定多个日期。
 - 重复任务按日期分别记录完成状态，不会因完成某一次而影响其他日期。
@@ -62,7 +63,7 @@ macOS 适配代码维护在 `codex/macos-port` 分支，并随 Windows 产品功
 
 ### 使用安装包
 
-1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.7.exe`。
+1. 前往 [Releases](https://github.com/ShawnXu01/DeskToDo/releases/latest) 下载 `DeskToDo-Setup-1.8.exe`。
 2. 运行安装程序，选择安装目录，并按需创建桌面快捷方式或启用开机自启动。
 3. 安装完成后启动 DeskToDo，按首次启动向导配置天气和可选的 Gist 同步。
 
@@ -92,6 +93,7 @@ DeskToDo 启动后会显示桌面面板，并在 Windows 通知区域保留托�
 | GitHub Gist Token | 设置 → 数据同步 | 用于同步任务；保存后需要完全退出并重启 DeskToDo |
 | Gist ID | 设置 → 数据同步 | 高级选项；自动查找失败或需要指定某个 Gist 时再填写 |
 | 课前提醒 | 设置 → 桌面组件 → 课表 → 设置 | 启用 Windows 通知并设置提前分钟数 |
+| 日历浏览方式 | 设置 → 桌面组件 → 日历交互 | 在点击模式和连续滚动模式之间切换，并调整滚动灵敏度 |
 | 节假日 JSON | 设置 → 节假日信息 | 导入会替换当前导入的数据，不是追加合并 |
 | 开机自启动 | 设置 → UI 调整 | 切换后立即更新当前用户的启动项 |
 | 日历字体大小 | 设置 → UI 调整 | 只调整右侧日历，并按主界面当前所在显示器分别记忆 |
@@ -188,7 +190,7 @@ python -m PyInstaller desktodo.spec --noconfirm
 构建产物：
 
 - `dist/DeskToDo/`：PyInstaller 单目录应用；
-- `installer_output/DeskToDo-Setup-1.7.exe`：Inno Setup 安装包。
+- `installer_output/DeskToDo-Setup-1.8.exe`：Inno Setup 安装包。
 
 > `desktodo.spec` 会把 `secrets/qweather/` 一并打包。私钥进入客户端后，理论上可以被提取并滥用天气服务额度。当前项目接受这一分发模型；若面向不受信任的公众大规模发布，应改为服务端代理，不能继续把私钥放入客户端。
 
@@ -218,7 +220,7 @@ DeskToDo/
 
 ## 当前边界与路线图
 
-- v1.7 正式安装包仅面向 Windows 桌面端；同版本功能与文档已同步到 `codex/macos-port`，macOS 二进制仍待 Mac 实机或 macOS CI 验证。
+- v1.8 正式安装包仅面向 Windows 桌面端；同版本功能与文档已同步到 `codex/macos-port`，macOS 二进制仍待 Mac 实机或 macOS CI 验证。
 - Gist 当前只同步任务，不同步课表或界面配置。
 - 默认只内置 2026 年需要按年份维护的节假日数据；其他年份可导入 JSON。
 - V2 的跨端协同仍处于方案规划阶段，尚未实现，详见 [`docs/v2-mobile-sync-plan.md`](docs/v2-mobile-sync-plan.md)。

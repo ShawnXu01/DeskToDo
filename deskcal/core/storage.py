@@ -21,6 +21,12 @@ DEFAULT_CONFIG_PANEL_ALPHA = 210
 DEFAULT_CALENDAR_FONT_SCALE = 100
 MIN_CALENDAR_FONT_SCALE = 80
 MAX_CALENDAR_FONT_SCALE = 160
+CALENDAR_INTERACTION_CLICK = "click"
+CALENDAR_INTERACTION_SCROLL = "scroll"
+DEFAULT_CALENDAR_INTERACTION_MODE = CALENDAR_INTERACTION_CLICK
+DEFAULT_CALENDAR_SCROLL_SENSITIVITY = 70
+MIN_CALENDAR_SCROLL_SENSITIVITY = 25
+MAX_CALENDAR_SCROLL_SENSITIVITY = 150
 
 
 def get_data_dir() -> Path:
@@ -61,6 +67,38 @@ def save_appearance(**fields) -> None:
     payload = load_appearance()
     payload.update(fields)
     atomic_write_json(get_appearance_file(), payload)
+
+
+def normalize_calendar_interaction_mode(value) -> str:
+    """只接受已支持的日历浏览方式，旧配置或异常值回退到点击模式。"""
+    if value == CALENDAR_INTERACTION_SCROLL:
+        return CALENDAR_INTERACTION_SCROLL
+    return CALENDAR_INTERACTION_CLICK
+
+
+def load_calendar_interaction_mode() -> str:
+    return normalize_calendar_interaction_mode(load_appearance().get("calendar_interaction_mode"))
+
+
+def save_calendar_interaction_mode(mode: str) -> None:
+    save_appearance(calendar_interaction_mode=normalize_calendar_interaction_mode(mode))
+
+
+def normalize_calendar_scroll_sensitivity(value) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return DEFAULT_CALENDAR_SCROLL_SENSITIVITY
+    return max(
+        MIN_CALENDAR_SCROLL_SENSITIVITY,
+        min(MAX_CALENDAR_SCROLL_SENSITIVITY, round(value)),
+    )
+
+
+def load_calendar_scroll_sensitivity() -> int:
+    return normalize_calendar_scroll_sensitivity(load_appearance().get("calendar_scroll_sensitivity"))
+
+
+def save_calendar_scroll_sensitivity(value: int) -> None:
+    save_appearance(calendar_scroll_sensitivity=normalize_calendar_scroll_sensitivity(value))
 
 
 def get_main_tour_completed_version() -> int:

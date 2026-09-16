@@ -140,6 +140,37 @@ def test_calendar_font_scale_is_normalized(value, expected):
     assert storage.normalize_calendar_font_scale(value) == expected
 
 
+def test_calendar_interaction_mode_defaults_to_click_and_persists_scroll(tmp_path, monkeypatch):
+    appearance_file = tmp_path / "appearance.json"
+    monkeypatch.setattr(storage, "get_appearance_file", lambda: appearance_file)
+
+    assert storage.load_calendar_interaction_mode() == storage.CALENDAR_INTERACTION_CLICK
+
+    storage.save_calendar_interaction_mode(storage.CALENDAR_INTERACTION_SCROLL)
+
+    assert storage.load_calendar_interaction_mode() == storage.CALENDAR_INTERACTION_SCROLL
+    assert storage.load_appearance()["calendar_interaction_mode"] == storage.CALENDAR_INTERACTION_SCROLL
+
+
+def test_invalid_calendar_interaction_mode_falls_back_to_click():
+    assert storage.normalize_calendar_interaction_mode("unknown") == storage.CALENDAR_INTERACTION_CLICK
+    assert storage.normalize_calendar_interaction_mode(None) == storage.CALENDAR_INTERACTION_CLICK
+
+
+def test_calendar_scroll_sensitivity_is_normalized_and_persisted(tmp_path, monkeypatch):
+    appearance_file = tmp_path / "appearance.json"
+    monkeypatch.setattr(storage, "get_appearance_file", lambda: appearance_file)
+
+    assert storage.load_calendar_scroll_sensitivity() == storage.DEFAULT_CALENDAR_SCROLL_SENSITIVITY
+    assert storage.normalize_calendar_scroll_sensitivity(5) == storage.MIN_CALENDAR_SCROLL_SENSITIVITY
+    assert storage.normalize_calendar_scroll_sensitivity(500) == storage.MAX_CALENDAR_SCROLL_SENSITIVITY
+
+    storage.save_calendar_scroll_sensitivity(55)
+
+    assert storage.load_calendar_scroll_sensitivity() == 55
+    assert storage.load_appearance()["calendar_scroll_sensitivity"] == 55
+
+
 def test_main_tour_version_is_independent_and_persisted(tmp_path, monkeypatch):
     appearance_file = tmp_path / "appearance.json"
     monkeypatch.setattr(storage, "get_appearance_file", lambda: appearance_file)

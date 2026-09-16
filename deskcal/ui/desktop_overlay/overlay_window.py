@@ -25,12 +25,16 @@ from PyQt6.QtWidgets import (
 from deskcal.core.storage import (
     TaskStore,
     get_main_tour_completed_version,
+    load_calendar_interaction_mode,
     load_calendar_font_scale,
+    load_calendar_scroll_sensitivity,
     load_appearance,
     load_window_geometry,
     mark_main_tour_completed,
     normalize_calendar_font_scale,
     save_calendar_font_scale,
+    save_calendar_interaction_mode,
+    save_calendar_scroll_sensitivity,
     save_appearance,
     save_window_geometry,
 )
@@ -345,7 +349,11 @@ class OverlayWindow(QWidget):
 
         layout.addWidget(self._left_container)
 
-        self._calendar = CalendarGrid(store)
+        self._calendar = CalendarGrid(
+            store,
+            interaction_mode=load_calendar_interaction_mode(),
+            scroll_sensitivity=load_calendar_scroll_sensitivity(),
+        )
         layout.addWidget(self._calendar, 1)
         self._refresh_calendar_font_for_current_screen()
 
@@ -430,6 +438,14 @@ class OverlayWindow(QWidget):
         normalized = normalize_calendar_font_scale(scale)
         save_calendar_font_scale(self._calendar_screen_signature, normalized)
         self._calendar.set_font_scale(normalized)
+
+    def _set_calendar_interaction_mode(self, mode: str) -> None:
+        save_calendar_interaction_mode(mode)
+        self._calendar.set_interaction_mode(mode)
+
+    def _set_calendar_scroll_sensitivity(self, value: int) -> None:
+        save_calendar_scroll_sensitivity(value)
+        self._calendar.set_scroll_sensitivity(value)
 
     def _apply_saved_or_default_geometry(self) -> None:
         saved = load_window_geometry(self._monitor_signature)
@@ -580,6 +596,10 @@ class OverlayWindow(QWidget):
                 current_calendar_screen_label=self._calendar_screen_label,
                 on_calendar_font_scale_changed=self._set_current_calendar_font_scale,
                 on_holidays_changed=self._calendar.render,
+                current_calendar_interaction_mode=load_calendar_interaction_mode(),
+                on_calendar_interaction_mode_changed=self._set_calendar_interaction_mode,
+                current_calendar_scroll_sensitivity=load_calendar_scroll_sensitivity(),
+                on_calendar_scroll_sensitivity_changed=self._set_calendar_scroll_sensitivity,
             )
         self._config_window.show()
         self._config_window.raise_()
