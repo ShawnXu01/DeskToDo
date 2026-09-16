@@ -2,9 +2,9 @@
 ; 编译前需要先用 PyInstaller 把 dist\DeskToDo 目录打好（见 desktodo.spec）
 
 #define MyAppName "DeskToDo"
-#define MyAppVersion "1.7"
+#define MyAppVersion "1.8"
 #define MyAppExeName "DeskToDo.exe"
-#define MyAppIconName "DeskToDo-v1.7.ico"
+#define MyAppIconName "DeskToDo-v1.8.ico"
 
 [Setup]
 AppId={{8F2C9C9C-2B9B-4B3C-9B2A-DESKTODO0001}}

@@ -8,6 +8,7 @@ from typing import Callable, Optional
 from PyQt6.QtCore import QPoint, QSize, QTimer, Qt
 from PyQt6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QFileDialog,
@@ -28,11 +29,19 @@ from PyQt6.QtWidgets import (
 )
 
 from deskcal.core.storage import (
+    CALENDAR_INTERACTION_CLICK,
+    CALENDAR_INTERACTION_SCROLL,
+    DEFAULT_CALENDAR_INTERACTION_MODE,
+    DEFAULT_CALENDAR_SCROLL_SENSITIVITY,
     MAX_CALENDAR_FONT_SCALE,
+    MAX_CALENDAR_SCROLL_SENSITIVITY,
     MIN_CALENDAR_FONT_SCALE,
+    MIN_CALENDAR_SCROLL_SENSITIVITY,
     list_window_profiles,
     load_appearance,
     normalize_calendar_font_scale,
+    normalize_calendar_interaction_mode,
+    normalize_calendar_scroll_sensitivity,
     save_appearance,
 )
 from deskcal.services import autostart
@@ -60,6 +69,7 @@ QLabel { background: transparent; }
 QLabel#settingsBrand { color: #ffffff; font-size: 20px; font-weight: 700; }
 QLabel#settingsCaption, QLabel#settingsSubtitle { color: #a9a9a9; }
 QLabel#settingsTitle { color: #ffffff; font-size: 20px; font-weight: 700; }
+QLabel#settingsSectionTitle { color: #ffffff; font-size: 14px; font-weight: 600; }
 QFrame#settingsDivider { background-color: #333333; border: none; }
 QPushButton {
     min-height: 34px;
@@ -106,6 +116,13 @@ QFrame#widgetSettingsRow {
     border: 1px solid #363636;
     border-radius: 8px;
 }
+QFrame#calendarModeRow {
+    min-height: 64px;
+    background-color: #222222;
+    border: 1px solid #363636;
+    border-radius: 8px;
+}
+QPushButton#calendarModeButton { min-width: 88px; }
 QListWidget#widgetSettingsList { background: transparent; border: none; border-radius: 0; }
 QListWidget#widgetSettingsList::item {
     min-height: 76px;
@@ -442,14 +459,107 @@ class _WidgetPreview(QFrame):
 
 
 class WidgetsTab(QWidget):
-    def __init__(self, store: WidgetConfigStore, on_changed: Callable[[], None], parent=None):
+    def __init__(
+        self,
+        store: WidgetConfigStore,
+        on_changed: Callable[[], None],
+        current_calendar_interaction_mode: str = DEFAULT_CALENDAR_INTERACTION_MODE,
+        on_calendar_interaction_mode_changed: Optional[Callable[[str], None]] = None,
+        current_calendar_scroll_sensitivity: int = DEFAULT_CALENDAR_SCROLL_SENSITIVITY,
+        on_calendar_scroll_sensitivity_changed: Optional[Callable[[int], None]] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self._store = store
         self._on_changed = on_changed
+        self._on_calendar_interaction_mode_changed = on_calendar_interaction_mode_changed or (lambda _mode: None)
+        self._on_calendar_scroll_sensitivity_changed = (
+            on_calendar_scroll_sensitivity_changed or (lambda _value: None)
+        )
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(10)
+
+        calendar_title = QLabel("日历交互")
+        calendar_title.setObjectName("settingsSectionTitle")
+        self._layout.addWidget(calendar_title)
+
+        calendar_row = QFrame()
+        calendar_row.setObjectName("calendarModeRow")
+        calendar_row_layout = QHBoxLayout(calendar_row)
+        calendar_row_layout.setContentsMargins(14, 8, 10, 8)
+        calendar_row_layout.setSpacing(8)
+
+        calendar_text = QVBoxLayout()
+        calendar_text.setSpacing(1)
+        calendar_name = QLabel("月份浏览方式")
+        calendar_description = QLabel("点击模式保留原操作；滚动模式按独立月份连续浏览")
+        calendar_description.setObjectName("widgetDescription")
+        calendar_text.addWidget(calendar_name)
+        calendar_text.addWidget(calendar_description)
+        calendar_row_layout.addLayout(calendar_text, 1)
+
+        self._calendar_mode_group = QButtonGroup(self)
+        self._calendar_mode_group.setExclusive(True)
+        self._click_mode_button = QPushButton("点击模式")
+        self._scroll_mode_button = QPushButton("滚动模式")
+        for button in (self._click_mode_button, self._scroll_mode_button):
+            button.setObjectName("calendarModeButton")
+            button.setCheckable(True)
+            self._calendar_mode_group.addButton(button)
+            calendar_row_layout.addWidget(button)
+        self._click_mode_button.clicked.connect(
+            lambda: self._set_calendar_interaction_mode(CALENDAR_INTERACTION_CLICK)
+        )
+        self._scroll_mode_button.clicked.connect(
+            lambda: self._set_calendar_interaction_mode(CALENDAR_INTERACTION_SCROLL)
+        )
+        self.set_calendar_interaction_mode(current_calendar_interaction_mode)
+        self._layout.addWidget(calendar_row)
+
+        sensitivity_row = QFrame()
+        sensitivity_row.setObjectName("calendarModeRow")
+        sensitivity_layout = QHBoxLayout(sensitivity_row)
+        sensitivity_layout.setContentsMargins(14, 8, 14, 8)
+        sensitivity_layout.setSpacing(12)
+
+        sensitivity_text = QVBoxLayout()
+        sensitivity_text.setSpacing(1)
+        sensitivity_name = QLabel("滚动灵敏度")
+        sensitivity_description = QLabel("数值越低，每次滚动移动的距离越短")
+        sensitivity_description.setObjectName("widgetDescription")
+        sensitivity_text.addWidget(sensitivity_name)
+        sensitivity_text.addWidget(sensitivity_description)
+        sensitivity_layout.addLayout(sensitivity_text, 1)
+
+        self._scroll_sensitivity_slider = QSlider(Qt.Orientation.Horizontal)
+        self._scroll_sensitivity_slider.setRange(
+            MIN_CALENDAR_SCROLL_SENSITIVITY,
+            MAX_CALENDAR_SCROLL_SENSITIVITY,
+        )
+        self._scroll_sensitivity_slider.setSingleStep(5)
+        self._scroll_sensitivity_slider.setPageStep(25)
+        self._scroll_sensitivity_slider.setMinimumWidth(170)
+        self._scroll_sensitivity_slider.setValue(
+            normalize_calendar_scroll_sensitivity(current_calendar_scroll_sensitivity)
+        )
+        self._scroll_sensitivity_value = QLabel(f"{self._scroll_sensitivity_slider.value()}%")
+        self._scroll_sensitivity_value.setMinimumWidth(42)
+        self._scroll_sensitivity_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._scroll_sensitivity_slider.valueChanged.connect(self._set_calendar_scroll_sensitivity)
+        sensitivity_layout.addWidget(self._scroll_sensitivity_slider)
+        sensitivity_layout.addWidget(self._scroll_sensitivity_value)
+        self._layout.addWidget(sensitivity_row)
+
+        section_divider = QFrame()
+        section_divider.setObjectName("settingsDivider")
+        section_divider.setFixedHeight(1)
+        self._layout.addWidget(section_divider)
+        self._layout.addSpacing(4)
+        widgets_title = QLabel("桌面组件")
+        widgets_title.setObjectName("settingsSectionTitle")
+        self._layout.addWidget(widgets_title)
 
         hint = QLabel("按住左侧拖动手柄调整顺序，桌面会立即同步更新。")
         hint.setObjectName("settingsSubtitle")
@@ -464,6 +574,25 @@ class WidgetsTab(QWidget):
         self._layout.addWidget(self._list, 1)
 
         self.render()
+
+    def _set_calendar_interaction_mode(self, mode: str) -> None:
+        normalized = normalize_calendar_interaction_mode(mode)
+        self.set_calendar_interaction_mode(normalized)
+        self._on_calendar_interaction_mode_changed(normalized)
+
+    def set_calendar_interaction_mode(self, mode: str) -> None:
+        normalized = normalize_calendar_interaction_mode(mode)
+        self._click_mode_button.blockSignals(True)
+        self._scroll_mode_button.blockSignals(True)
+        self._click_mode_button.setChecked(normalized == CALENDAR_INTERACTION_CLICK)
+        self._scroll_mode_button.setChecked(normalized == CALENDAR_INTERACTION_SCROLL)
+        self._click_mode_button.blockSignals(False)
+        self._scroll_mode_button.blockSignals(False)
+
+    def _set_calendar_scroll_sensitivity(self, value: int) -> None:
+        normalized = normalize_calendar_scroll_sensitivity(value)
+        self._scroll_sensitivity_value.setText(f"{normalized}%")
+        self._on_calendar_scroll_sensitivity_changed(normalized)
 
     def render(self) -> None:
         self._list.clear()
@@ -858,7 +987,7 @@ class AboutTab(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        label = QLabel("DeskToDo\n版本 1.7")
+        label = QLabel("DeskToDo\n版本 1.8")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
 
@@ -888,6 +1017,10 @@ class ConfigWindow(QWidget):
         current_calendar_screen_label: str = "",
         on_calendar_font_scale_changed: Optional[Callable[[int], None]] = None,
         on_holidays_changed: Optional[Callable[[], None]] = None,
+        current_calendar_interaction_mode: str = DEFAULT_CALENDAR_INTERACTION_MODE,
+        on_calendar_interaction_mode_changed: Optional[Callable[[str], None]] = None,
+        current_calendar_scroll_sensitivity: int = DEFAULT_CALENDAR_SCROLL_SENSITIVITY,
+        on_calendar_scroll_sensitivity_changed: Optional[Callable[[int], None]] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -949,7 +1082,14 @@ class ConfigWindow(QWidget):
         content_layout.addWidget(self._stack, 1)
         layout.addWidget(content, 1)
 
-        self._widgets_tab = WidgetsTab(store, on_widgets_changed)
+        self._widgets_tab = WidgetsTab(
+            store,
+            on_widgets_changed,
+            current_calendar_interaction_mode,
+            on_calendar_interaction_mode_changed,
+            current_calendar_scroll_sensitivity,
+            on_calendar_scroll_sensitivity_changed,
+        )
         self._stack.addWidget(self._widgets_tab)
         self._ui_settings_tab = UISettingsTab(
             current_panel_alpha,
