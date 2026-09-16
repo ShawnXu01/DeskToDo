@@ -23,3 +23,14 @@
 - [ ] 将同版本产品改动同步到 `codex/macos-port`，保留并验证平台专属代码。
 - [ ] 推送两个分支，并核对远程分支提交与本地提交一致。
 - [ ] 最终报告两个平台的版本、测试结果、产物位置、尚未完成的实机验证和任何已知限制。
+
+## v1.8 执行记录（2026-09-16）
+
+- [x] 代码、关于页、安装脚本、README、用户指南和产物名称统一为 v1.8。
+- [x] Windows `master` 与 `codex/macos-port` 均通过 108 项自动化测试和 `git diff --check`。
+- [x] 使用 `desktodo.spec` 重新生成 `dist/DeskToDo/`，并成功启动打包后的程序。
+- [x] 使用 `installer.iss` 生成 `installer_output/DeskToDo-Setup-1.8.exe`；版本元数据为 1.8，大小为 36,962,223 字节。
+- [x] Windows 安装包 SHA-256：`8857EEF74B8CBDD62F84F25D595E9D8DE678DBB54D8AB01B47AE85145AF5E3FB`。
+- [x] v1.8 日历模式、设置、数据配置、测试和文档已同步到 `codex/macos-port`，并保留 macOS 原生窗口探针。
+- [ ] macOS `.app`/`.dmg` 构建及桌面层级实机验证：需要在 macOS 实机或 macOS CI 上完成，Windows 无法验证。
+- [x] `master`、`codex/macos-port`、`v1.8` 标签和 Windows 安装包发布到 GitHub。
